@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three overlapping slanted blades. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#B86BD9"
+        android:pathData="M62,34 L76,30 L76,78 L62,74 Z" />
+    <path
+        android:fillColor="#3FA7D6"
+        android:pathData="M48,32 L64,27 L64,81 L48,76 Z" />
+    <path
+        android:fillColor="#4CC38A"
+        android:pathData="M32,30 L50,24 L50,84 L32,78 Z" />
+</vector>
