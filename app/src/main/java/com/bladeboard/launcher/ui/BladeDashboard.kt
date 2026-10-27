@@ -28,7 +28,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.coerceIn
+import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.bladeboard.launcher.data.AppRepository
@@ -76,7 +76,9 @@ fun BladeDashboard(
             val tabW = settings.tabWidthDp.dp
             val fullW = maxWidth
             // Edge curvature scales with screen height so tall phones get a gentle, long arc.
-            val curve = (maxHeight * 0.012f).coerceIn(5.dp, 10.dp)
+            // Signed: the Style slider can bend edges either way (0 = straight).
+            val curve = (maxHeight * 0.024f).coerceAtMost(22.dp) * (settings.curveStrength / 100f)
+            val curveSize = if (curve < 0.dp) -curve else curve
             val bladeW = fullW - tabW * (count - 1)
             val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
             var dragTotal by remember { mutableFloatStateOf(0f) }
@@ -123,10 +125,11 @@ fun BladeDashboard(
                         classic = settings.classicBlades,
                         tabWidth = tabW,
                         curve = curve,
+                        finish = settings.tabFinish,
                         onTabClick = { go(i) },
                         modifier = Modifier
                             .offset(x = x)
-                            .width(bladeW + curve)
+                            .width(bladeW + curveSize)
                             .fillMaxHeight()
                             .zIndex(i.toFloat())
                             .graphicsLayer {

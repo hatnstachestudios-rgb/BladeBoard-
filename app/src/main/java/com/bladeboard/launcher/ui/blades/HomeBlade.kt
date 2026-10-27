@@ -76,11 +76,11 @@ fun HomeBlade(repo: AppRepository, settings: LauncherSettings, updates: UpdateMa
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(settings.gridColumns),
+                columns = GridCells.Fixed(settings.pinnedColumns),
                 contentPadding = PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(pinned, key = { it.key }) { app -> AppTile(app, repo, settings, accent) }
+                items(pinned, key = { it.key }) { app -> AppTile(app, repo, settings, accent, iconSize = settings.pinnedIconSizeDp.dp) }
             }
         }
     }

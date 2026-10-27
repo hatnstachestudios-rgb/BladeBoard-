@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -65,6 +66,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.bladeboard.launcher.data.AppEntry
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.BackgroundStyle
+import com.bladeboard.launcher.data.TabFinish
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.ui.theme.BladeSurface
 import kotlin.math.cos
@@ -87,25 +89,32 @@ fun Blade(
     classic: Boolean,
     tabWidth: Dp,
     curve: Dp,
+    finish: TabFinish,
     onTabClick: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val tabText = if (accent.luminance() > 0.5f) Color(0xFF111111) else Color.White
     // +1 = edge bows toward the right, -1 = toward the left. Animated so blades bend as they slide.
-    val bulge by animateFloatAsState(if (onRight) -1f else 1f, label = "bladeBulge")
+    // A negative curve flips which way every edge bends.
+    val direction = if (curve < 0.dp) -1f else 1f
+    val curveSize = if (curve < 0.dp) -curve else curve
+    val bulge by animateFloatAsState((if (onRight) -1f else 1f) * direction, label = "bladeBulge")
     val density = LocalDensity.current
-    val curvePx = if (classic) with(density) { curve.toPx() } else 0f
+    val curvePx = if (classic) with(density) { curveSize.toPx() } else 0f
     val shape = remember(bulge, curvePx) { BladeEdgeShape(bulge, curvePx) }
     // Shift the tab label so it stays centered on the visible part of the curved strip.
-    val labelShift = if (classic) curve * ((1f + bulge) / 2f) else 0.dp
+    val labelShift = if (classic) curveSize * ((1f + bulge) / 2f) else 0.dp
 
     Row(modifier.shadow(if (active) 28.dp else 10.dp, shape).clip(shape)) {
         Box(
             Modifier
                 .width(tabWidth)
                 .fillMaxHeight()
-                .background(if (classic) Brush.horizontalGradient(listOf(accent, accent)) else Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.78f))))
+                .then(
+                    if (classic) Modifier.tabFinish(finish, accent, seed = title.hashCode())
+                    else Modifier.background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.78f))))
+                )
                 .clickable(onClick = onTabClick)
                 .padding(start = labelShift),
             contentAlignment = Alignment.Center,
@@ -123,7 +132,7 @@ fun Blade(
             )
         }
         val body = if (classic) {
-            val arch = with(density) { (curve * 1.6f).toPx() }
+            val arch = with(density) { (curveSize * 1.6f).toPx() }
             Modifier
                 .background(panel.darken(0.32f))
                 .clip(remember(arch) { ArchShape(arch) })
@@ -150,6 +159,66 @@ fun Blade(
             if (active || alpha > 0.01f) {
                 Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }) { content() }
             }
+        }
+    }
+}
+
+/** Paints a tab in the chosen finish. */
+private fun Modifier.tabFinish(finish: TabFinish, color: Color, seed: Int): Modifier = composed {
+    when (finish) {
+        TabFinish.FLAT -> background(color)
+
+        // Brushed metal: cylindrical light bands across the strip plus fine vertical grain.
+        TabFinish.METALLIC -> background(
+            Brush.horizontalGradient(
+                0f to color.darken(0.35f),
+                0.18f to color.lighten(0.45f),
+                0.4f to color,
+                0.62f to color.lighten(0.25f),
+                1f to color.darken(0.4f),
+            )
+        ).drawBehind {
+            val step = 2.dp.toPx()
+            var x = 0f
+            var i = 0
+            while (x < size.width) {
+                val a = if (i % 3 == 0) 0.07f else 0.03f
+                drawLine(if (i % 2 == 0) Color.White.copy(alpha = a) else Color.Black.copy(alpha = a), Offset(x, 0f), Offset(x, size.height), 1f)
+                x += step; i++
+            }
+        }
+
+        // Glossy plastic: strong highlight on the left half, darker right edge.
+        TabFinish.GLOSS -> background(Brush.horizontalGradient(listOf(color.lighten(0.1f), color, color.darken(0.3f))))
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    Brush.horizontalGradient(
+                        0f to Color.White.copy(alpha = 0.55f),
+                        0.45f to Color.White.copy(alpha = 0.12f),
+                        0.46f to Color.Transparent,
+                    ),
+                )
+                drawLine(Color.White.copy(alpha = 0.6f), Offset(1.5f, 0f), Offset(1.5f, size.height), 2f)
+            }
+
+        // Metal-flake: twinkling specks over a soft gradient.
+        TabFinish.SPARKLE -> {
+            val specks = remember(seed) {
+                val rnd = java.util.Random(seed.toLong())
+                List(70) { floatArrayOf(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat() * 6.28f, 0.6f + rnd.nextFloat() * 1.4f) }
+            }
+            val t by rememberInfiniteTransition(label = "sparkle").animateFloat(
+                0f, 6.28f, infiniteRepeatable(tween(3_000, easing = LinearEasing)), label = "twinkle",
+            )
+            background(Brush.verticalGradient(listOf(color.lighten(0.15f), color, color.darken(0.25f))))
+                .drawBehind {
+                    val r = 1.2.dp.toPx()
+                    specks.forEach { (fx, fy, phase, scale) ->
+                        val a = (0.5f + 0.5f * sin(t + phase)).let { it * it }
+                        drawCircle(Color.White.copy(alpha = 0.85f * a), radius = r * scale, center = Offset(fx * size.width, fy * size.height))
+                    }
+                }
         }
     }
 }
@@ -239,7 +308,7 @@ fun Modifier.dashboardBackground(settings: LauncherSettings): Modifier = compose
 /** App icon + label with a long-press menu (pin, info, uninstall). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AppTile(app: AppEntry, repo: AppRepository, settings: LauncherSettings, accent: Color) {
+fun AppTile(app: AppEntry, repo: AppRepository, settings: LauncherSettings, accent: Color, iconSize: Dp = settings.iconSizeDp.dp) {
     var menuOpen by remember { mutableStateOf(false) }
     Box {
         Column(
@@ -253,7 +322,7 @@ fun AppTile(app: AppEntry, repo: AppRepository, settings: LauncherSettings, acce
                 )
                 .padding(vertical = 8.dp, horizontal = 4.dp),
         ) {
-            Image(bitmap = app.icon, contentDescription = app.label, modifier = Modifier.size(settings.iconSizeDp.dp))
+            Image(bitmap = app.icon, contentDescription = app.label, modifier = Modifier.size(iconSize))
             if (settings.showLabels) {
                 Spacer(Modifier.height(6.dp))
                 Text(

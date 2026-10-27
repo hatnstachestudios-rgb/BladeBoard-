@@ -317,7 +317,7 @@ private fun Reflection(app: AppEntry, accent: Color, cardH: Dp, reflectionH: Dp,
     }
 }
 
-/** Dark band with the focused app's name and position, plus a gesture legend. */
+/** Dark band with the focused app's name and position. */
 @Composable
 private fun InfoBar(focused: AppEntry?, apps: List<AppEntry>, accent: Color) {
     Column(Modifier.fillMaxWidth()) {
@@ -340,32 +340,5 @@ private fun InfoBar(focused: AppEntry?, apps: List<AppEntry>, accent: Color) {
                 Text("${apps.indexOf(focused) + 1} of ${apps.size}", fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
             }
         }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(Color.White.copy(alpha = 0.9f))
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Hint("Tap", "Launch", accent)
-            Hint("Hold", "Options", accent)
-            Hint("Swipe", "Browse", accent)
-        }
-    }
-}
-
-@Composable
-private fun Hint(gesture: String, action: String, accent: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .border(1.5.dp, accent, RoundedCornerShape(50))
-                .padding(horizontal = 7.dp, vertical = 1.dp)
-        ) {
-            Text(gesture, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1D22))
-        }
-        Spacer(Modifier.width(5.dp))
-        Text(action, fontSize = 12.sp, color = Color(0xFF3A3F47))
     }
 }

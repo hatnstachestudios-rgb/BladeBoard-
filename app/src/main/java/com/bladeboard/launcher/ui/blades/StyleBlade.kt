@@ -48,6 +48,7 @@ import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.BackgroundStyle
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.data.Palettes
+import com.bladeboard.launcher.data.TabFinish
 import com.bladeboard.launcher.ui.BladeHeader
 import com.bladeboard.launcher.ui.UpdateBanner
 import com.bladeboard.launcher.update.UpdateManager
@@ -132,10 +133,31 @@ fun StyleBlade(
             }
         }
 
+        // --- Blade shape & finish ---
+        BladeHeader("Blade shape", accent)
+        LabeledSlider("Edge curve (← bends one way · bends other way →)", settings.curveStrength, -100..100, accent) { settings.curveStrength = it }
+        Text("Tab finish", fontSize = 14.sp)
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            val finishes = TabFinish.entries
+            finishes.forEachIndexed { i, f ->
+                SegmentedButton(
+                    selected = settings.tabFinish == f,
+                    onClick = { settings.tabFinish = f },
+                    shape = SegmentedButtonDefaults.itemShape(i, finishes.size),
+                    colors = SegmentedButtonDefaults.colors(activeContainerColor = accent.copy(alpha = 0.35f)),
+                ) { Text(f.name.lowercase().replaceFirstChar { it.uppercase() }, fontSize = 11.sp, maxLines = 1) }
+            }
+        }
+
+        // --- Home ---
+        BladeHeader("Home", accent)
+        LabeledSlider("Pinned icon size", settings.pinnedIconSizeDp, 36..96, accent) { settings.pinnedIconSizeDp = it }
+        LabeledSlider("Pinned columns", settings.pinnedColumns, 2..6, accent) { settings.pinnedColumns = it }
+
         // --- Layout ---
         BladeHeader("Layout", accent)
-        LabeledSlider("Icon size", settings.iconSizeDp, 40..64, accent) { settings.iconSizeDp = it }
-        LabeledSlider("Columns", settings.gridColumns, 3..6, accent) { settings.gridColumns = it }
+        LabeledSlider("App grid icon size", settings.iconSizeDp, 40..64, accent) { settings.iconSizeDp = it }
+        LabeledSlider("App grid columns", settings.gridColumns, 3..6, accent) { settings.gridColumns = it }
         LabeledSlider("Tab width", settings.tabWidthDp, 24..48, accent) { settings.tabWidthDp = it }
         LabeledSwitch("Carousel app drawer", settings.appsCarousel, accent) { settings.appsCarousel = it }
         LabeledSwitch("Curved classic blades", settings.classicBlades, accent) { settings.classicBlades = it }

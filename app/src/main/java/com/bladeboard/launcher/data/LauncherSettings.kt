@@ -12,6 +12,8 @@ import kotlin.reflect.KProperty
 
 enum class BackgroundStyle { GRADIENT, WALLPAPER, SOLID }
 
+enum class TabFinish { FLAT, METALLIC, GLOSS, SPARKLE }
+
 /** A named color scheme: two background stops plus one accent per blade. */
 data class HostedWidget(val id: Int, val heightDp: Int)
 
@@ -79,6 +81,15 @@ class LauncherSettings(context: Context) {
     var autoUpdate by boolPref("auto_update", true)
     var colorfulQuickIcons by boolPref("colorful_quick_icons", true)
     var classicBlades by boolPref("classic_blades", true)
+    /** -100..100: strength of the blade edge curve; negative bends the other way. */
+    var curveStrength by intPref("curve_strength", 50)
+    var pinnedIconSizeDp by intPref("pinned_icon_size", 52)
+    var pinnedColumns by intPref("pinned_columns", 4)
+
+    private var tabFinishName by stringPref("tab_finish", TabFinish.FLAT.name)
+    var tabFinish: TabFinish
+        get() = runCatching { TabFinish.valueOf(tabFinishName) }.getOrDefault(TabFinish.FLAT)
+        set(value) { tabFinishName = value.name }
 
     // Widgets hosted on the Music blade, top to bottom. Stored as "id:heightDp|id:heightDp".
     var musicWidgets by mutableStateOf(
@@ -162,6 +173,7 @@ class LauncherSettings(context: Context) {
     fun resetLook() {
         paletteIndex = 0; iconSizeDp = 52; gridColumns = 4; tabWidthDp = 34
         showLabels = true; use24h = false; bladeDepth = true; appsCarousel = true; classicBlades = true
+        curveStrength = 50; pinnedIconSizeDp = 52; pinnedColumns = 4; tabFinish = TabFinish.FLAT
         backgroundStyle = BackgroundStyle.GRADIENT
         repeat(MAX_BLADES) { setAccentOverride(it, -1); setPanelOverride(it, -1) }
     }
