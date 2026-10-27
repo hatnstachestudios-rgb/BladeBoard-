@@ -134,6 +134,7 @@ fun StyleBlade(
         LabeledSlider("Columns", settings.gridColumns, 3..6, accent) { settings.gridColumns = it }
         LabeledSlider("Tab width", settings.tabWidthDp, 24..48, accent) { settings.tabWidthDp = it }
         LabeledSwitch("Carousel app drawer", settings.appsCarousel, accent) { settings.appsCarousel = it }
+        LabeledSwitch("Colorful Quick icons", settings.colorfulQuickIcons, accent) { settings.colorfulQuickIcons = it }
         LabeledSwitch("Show app labels", settings.showLabels, accent) { settings.showLabels = it }
         LabeledSwitch("Blade depth effect", settings.bladeDepth, accent) { settings.bladeDepth = it }
         LabeledSwitch("24-hour clock", settings.use24h, accent) { settings.use24h = it }

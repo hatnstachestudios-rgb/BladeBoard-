@@ -74,6 +74,7 @@ class LauncherSettings(context: Context) {
     var appsCarousel by boolPref("apps_carousel", true)
     var showPlayerCard by boolPref("show_player_card", true)
     var autoUpdate by boolPref("auto_update", true)
+    var colorfulQuickIcons by boolPref("colorful_quick_icons", true)
 
     // Widgets hosted on the Music blade, top to bottom. Stored as "id:heightDp|id:heightDp".
     var musicWidgets by mutableStateOf(

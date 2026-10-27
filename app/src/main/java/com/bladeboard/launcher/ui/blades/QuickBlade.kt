@@ -32,30 +32,43 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.ui.BladeHeader
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import com.bladeboard.launcher.data.LauncherSettings
+import com.bladeboard.launcher.ui.QuickIcons
 
-private data class QuickAction(val label: String, val sub: String, val intent: () -> Intent)
+private data class QuickAction(val label: String, val sub: String, val icon: ImageVector, val intent: () -> Intent)
 
 private val actions = listOf(
-    QuickAction("Wi-Fi", "Networks") {
+    QuickAction("Wi-Fi", "Networks", QuickIcons.Wifi) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Intent(Settings.Panel.ACTION_WIFI)
         else Intent(Settings.ACTION_WIFI_SETTINGS)
     },
-    QuickAction("Bluetooth", "Devices") { Intent(Settings.ACTION_BLUETOOTH_SETTINGS) },
-    QuickAction("Display", "Brightness, dark mode") { Intent(Settings.ACTION_DISPLAY_SETTINGS) },
-    QuickAction("Sound", "Volume, ringtones") {
+    QuickAction("Bluetooth", "Devices", QuickIcons.Bluetooth) { Intent(Settings.ACTION_BLUETOOTH_SETTINGS) },
+    QuickAction("Display", "Brightness, dark mode", QuickIcons.Brightness) { Intent(Settings.ACTION_DISPLAY_SETTINGS) },
+    QuickAction("Sound", "Volume, ringtones", QuickIcons.Volume) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Intent(Settings.Panel.ACTION_VOLUME)
         else Intent(Settings.ACTION_SOUND_SETTINGS)
     },
-    QuickAction("Battery", "Saver, usage") { Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS) },
-    QuickAction("Wallpaper", "Change background") {
+    QuickAction("Battery", "Saver, usage", QuickIcons.Battery) { Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS) },
+    QuickAction("Wallpaper", "Change background", QuickIcons.Wallpaper) {
         Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Set wallpaper")
     },
-    QuickAction("Default home", "Pick launcher") { Intent(Settings.ACTION_HOME_SETTINGS) },
-    QuickAction("All settings", "Everything else") { Intent(Settings.ACTION_SETTINGS) },
+    QuickAction("Default home", "Pick launcher", QuickIcons.Home) { Intent(Settings.ACTION_HOME_SETTINGS) },
+    QuickAction("All settings", "Everything else", QuickIcons.Settings) { Intent(Settings.ACTION_SETTINGS) },
 )
 
 @Composable
-fun QuickBlade(repo: AppRepository, accent: Color) {
+fun QuickBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
+    val palette = settings.palette.blades
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 20.dp)) {
         BladeHeader("Quick settings", accent)
         Spacer(Modifier.height(16.dp))
@@ -65,23 +78,54 @@ fun QuickBlade(repo: AppRepository, accent: Color) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            items(actions) { action ->
-                Row(
+            itemsIndexed(actions) { i, action ->
+                val color = if (settings.colorfulQuickIcons) palette[i % palette.size] else accent
+                Column(
                     Modifier
                         .fillMaxWidth()
-                        .height(84.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .clickable { repo.openIntent(action.intent()) },
-                    verticalAlignment = Alignment.CenterVertically,
+                        .height(116.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))))
+                        .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                        .clickable { repo.openIntent(action.intent()) }
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Box(Modifier.width(5.dp).fillMaxHeight().background(accent))
-                    Column(Modifier.padding(horizontal = 14.dp)) {
-                        Text(action.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                        Text(action.sub, fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f))
+                    IconBadge(action.icon, color)
+                    Column {
+                        Text(action.label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(action.sub, fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         }
+    }
+}
+
+/** Glossy rounded badge: color gradient, soft top highlight, white glyph with a drop shadow. */
+@Composable
+private fun IconBadge(icon: ImageVector, color: Color) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        Modifier
+            .size(44.dp)
+            .shadow(6.dp, shape, ambientColor = color, spotColor = color)
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(color, color.copy(red = color.red * 0.55f, green = color.green * 0.55f, blue = color.blue * 0.55f))))
+            .drawWithContent {
+                drawContent()
+                // Glass highlight across the top half.
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = 0.35f),
+                        0.5f to Color.White.copy(alpha = 0.05f),
+                        0.5f to Color.Transparent,
+                    ),
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.Black.copy(alpha = 0.25f), modifier = Modifier.size(24.dp).offset(y = 1.dp))
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
     }
 }

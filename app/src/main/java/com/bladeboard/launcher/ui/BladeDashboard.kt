@@ -132,7 +132,7 @@ fun BladeDashboard(
                             0 -> HomeBlade(repo, settings, updates, accent)
                             1 -> MusicBlade(media, widgets, repo, settings, accent)
                             2 -> AppsBlade(repo, settings, accent)
-                            3 -> QuickBlade(repo, accent)
+                            3 -> QuickBlade(repo, settings, accent)
                             else -> StyleBlade(settings, repo, updates, BladeTitles, accent)
                         }
                     }
