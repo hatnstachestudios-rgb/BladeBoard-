@@ -53,6 +53,9 @@ val AccentSwatches = listOf(
     Color(0xFF7B5CFF), Color(0xFFB86BD9), Color(0xFFFF4D9D), Color(0xFFE8505B),
     Color(0xFFFF7A45), Color(0xFFF29E4C), Color(0xFFFFC145), Color(0xFFB6FF3B),
     Color(0xFFE0E0E0),
+    // Added later; appended so saved swatch choices keep their meaning.
+    Color(0xFFF7931E), Color(0xFFB8BCC2), Color(0xFF8A9099), Color(0xFF4A4F57), Color(0xFF1C1F24),
+    Color(0xFF2B6CB0), Color(0xFF1B7F5B), Color(0xFF8E2DE2),
 )
 
 /**
@@ -123,6 +126,21 @@ class LauncherSettings(context: Context) {
         prefs.edit().putInt("accent_$blade", swatch).apply()
     }
 
+    // Per-blade inner panel color: -1 means "same as the tab".
+    private val panelOverrides = List(MAX_BLADES) { i -> mutableIntStateOf(prefs.getInt("panel_$i", -1)) }
+
+    fun panelOverride(blade: Int): Int = panelOverrides[blade].intValue
+
+    fun setPanelOverride(blade: Int, swatch: Int) {
+        panelOverrides[blade].intValue = swatch
+        prefs.edit().putInt("panel_$blade", swatch).apply()
+    }
+
+    fun panelFor(blade: Int): Color {
+        val o = panelOverride(blade)
+        return if (o in AccentSwatches.indices) AccentSwatches[o] else accentFor(blade)
+    }
+
     fun accentFor(blade: Int): Color {
         val o = accentOverride(blade)
         return if (o in AccentSwatches.indices) AccentSwatches[o] else palette.blades[blade % palette.blades.size]
@@ -145,7 +163,7 @@ class LauncherSettings(context: Context) {
         paletteIndex = 0; iconSizeDp = 52; gridColumns = 4; tabWidthDp = 34
         showLabels = true; use24h = false; bladeDepth = true; appsCarousel = true; classicBlades = true
         backgroundStyle = BackgroundStyle.GRADIENT
-        repeat(MAX_BLADES) { setAccentOverride(it, -1) }
+        repeat(MAX_BLADES) { setAccentOverride(it, -1); setPanelOverride(it, -1) }
     }
 
     // --- tiny persisted-state delegates ---

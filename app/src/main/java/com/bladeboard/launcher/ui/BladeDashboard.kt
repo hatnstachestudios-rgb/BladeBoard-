@@ -117,6 +117,7 @@ fun BladeDashboard(
                     Blade(
                         title = title,
                         accent = accent,
+                        panel = settings.panelFor(i),
                         active = active,
                         onRight = i > selected,
                         classic = settings.classicBlades,
@@ -125,7 +126,7 @@ fun BladeDashboard(
                         onTabClick = { go(i) },
                         modifier = Modifier
                             .offset(x = x)
-                            .width(bladeW)
+                            .width(bladeW + curve)
                             .fillMaxHeight()
                             .zIndex(i.toFloat())
                             .graphicsLayer {

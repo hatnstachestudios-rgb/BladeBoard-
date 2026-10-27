@@ -81,6 +81,7 @@ import kotlin.math.sin
 fun Blade(
     title: String,
     accent: Color,
+    panel: Color,
     active: Boolean,
     onRight: Boolean,
     classic: Boolean,
@@ -124,11 +125,11 @@ fun Blade(
         val body = if (classic) {
             val arch = with(density) { (curve * 1.6f).toPx() }
             Modifier
-                .background(accent.darken(0.32f))
+                .background(panel.darken(0.32f))
                 .clip(remember(arch) { ArchShape(arch) })
                 .background(
                     Brush.linearGradient(
-                        listOf(accent.lighten(0.18f), accent, accent.darken(0.5f)),
+                        listOf(panel.lighten(0.18f), panel, panel.darken(0.5f)),
                         start = Offset.Zero,
                         end = Offset.Infinite,
                     )

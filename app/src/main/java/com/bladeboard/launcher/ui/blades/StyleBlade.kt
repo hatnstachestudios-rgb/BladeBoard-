@@ -112,19 +112,23 @@ fun StyleBlade(
 
         // --- Per-blade accents ---
         BladeHeader("Blade colors", accent)
+        Text(
+            "Tab is the outer bar; Panel is the inner menu. \"A\" = automatic (palette for tabs, match tab for panels).",
+            fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f),
+        )
         bladeTitles.forEachIndexed { blade, title ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title.replaceFirstChar { it.uppercase() }, Modifier.width(56.dp), fontSize = 13.sp)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Swatch(
-                        color = settings.palette.blades[blade % settings.palette.blades.size],
-                        selected = settings.accentOverride(blade) == -1,
-                        label = "A",
-                    ) { settings.setAccentOverride(blade, -1) }
-                    AccentSwatches.forEachIndexed { s, c ->
-                        Swatch(c, settings.accentOverride(blade) == s) { settings.setAccentOverride(blade, s) }
-                    }
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                SwatchRow(
+                    label = "Tab",
+                    autoColor = settings.palette.blades[blade % settings.palette.blades.size],
+                    selected = settings.accentOverride(blade),
+                ) { settings.setAccentOverride(blade, it) }
+                SwatchRow(
+                    label = "Panel",
+                    autoColor = settings.accentFor(blade),
+                    selected = settings.panelOverride(blade),
+                ) { settings.setPanelOverride(blade, it) }
             }
         }
 
@@ -166,6 +170,17 @@ fun StyleBlade(
             Text("Reset look to defaults", color = Color.White)
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SwatchRow(label: String, autoColor: Color, selected: Int, onSelect: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(48.dp), fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Swatch(autoColor, selected == -1, label = "A") { onSelect(-1) }
+            AccentSwatches.forEachIndexed { s, c -> Swatch(c, selected == s) { onSelect(s) } }
+        }
     }
 }
 
