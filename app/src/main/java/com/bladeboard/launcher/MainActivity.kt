@@ -9,12 +9,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.lifecycle.Lifecycle
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
+import com.bladeboard.launcher.media.MediaRepository
 import com.bladeboard.launcher.ui.BladeDashboard
 import com.bladeboard.launcher.ui.theme.BladeboardTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var repo: AppRepository
     private lateinit var settings: LauncherSettings
+    private lateinit var media: MediaRepository
 
     // Bumped each time the Home button is pressed while we're already the foreground app.
     private val homePresses = mutableIntStateOf(0)
@@ -25,10 +27,11 @@ class MainActivity : ComponentActivity() {
 
         settings = LauncherSettings(this)
         repo = AppRepository(this).also { it.start() }
+        media = MediaRepository(this)
 
         setContent {
             BladeboardTheme(settings) {
-                BladeDashboard(repo = repo, settings = settings, homePresses = homePresses.intValue)
+                BladeDashboard(repo = repo, media = media, settings = settings, homePresses = homePresses.intValue)
             }
         }
     }
@@ -41,7 +44,14 @@ class MainActivity : ComponentActivity() {
         if (intent.hasCategory(Intent.CATEGORY_HOME) && alreadyVisible) homePresses.intValue++
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Picks up newly granted notification access and the current player.
+        media.refresh()
+    }
+
     override fun onDestroy() {
+        media.stop()
         repo.stop()
         super.onDestroy()
     }

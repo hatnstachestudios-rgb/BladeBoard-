@@ -24,23 +24,23 @@ object Palettes {
     val all = listOf(
         Palette(
             "Aurora", Color(0xFF0B1A2B), Color(0xFF1E3A5F),
-            listOf(Color(0xFF4CC38A), Color(0xFF3FA7D6), Color(0xFFF29E4C), Color(0xFFB86BD9)),
+            listOf(Color(0xFF4CC38A), Color(0xFF3FA7D6), Color(0xFFF29E4C), Color(0xFFB86BD9), Color(0xFFE8505B)),
         ),
         Palette(
             "Ember", Color(0xFF1A0E0A), Color(0xFF4A1F12),
-            listOf(Color(0xFFFF7A45), Color(0xFFFFC145), Color(0xFFE8505B), Color(0xFF9BC53D)),
+            listOf(Color(0xFFFF7A45), Color(0xFFFFC145), Color(0xFFE8505B), Color(0xFF9BC53D), Color(0xFF3FA7D6)),
         ),
         Palette(
             "Tide", Color(0xFF04161A), Color(0xFF0C3B44),
-            listOf(Color(0xFF2EC4B6), Color(0xFF5BC0EB), Color(0xFFE9C46A), Color(0xFFF4A261)),
+            listOf(Color(0xFF2EC4B6), Color(0xFF5BC0EB), Color(0xFFE9C46A), Color(0xFFF4A261), Color(0xFFE76F51)),
         ),
         Palette(
             "Neon", Color(0xFF0A0614), Color(0xFF241046),
-            listOf(Color(0xFFFF4D9D), Color(0xFF7B5CFF), Color(0xFF00E0FF), Color(0xFFB6FF3B)),
+            listOf(Color(0xFFFF4D9D), Color(0xFF7B5CFF), Color(0xFF00E0FF), Color(0xFFB6FF3B), Color(0xFFFFC145)),
         ),
         Palette(
             "Graphite", Color(0xFF121212), Color(0xFF2B2B2E),
-            listOf(Color(0xFFE0E0E0), Color(0xFF9E9E9E), Color(0xFF64B5F6), Color(0xFFFFB74D)),
+            listOf(Color(0xFFE0E0E0), Color(0xFF9E9E9E), Color(0xFF64B5F6), Color(0xFFFFB74D), Color(0xFF81C784)),
         ),
     )
 }
@@ -68,6 +68,7 @@ class LauncherSettings(context: Context) {
     var showLabels by boolPref("show_labels", true)
     var use24h by boolPref("use_24h", false)
     var bladeDepth by boolPref("blade_depth", true)
+    var musicAppKey by stringPref("music_app", "")
 
     private var backgroundName by stringPref("background", BackgroundStyle.GRADIENT.name)
     var backgroundStyle: BackgroundStyle
@@ -141,6 +142,6 @@ class LauncherSettings(context: Context) {
     }
 
     companion object {
-        const val MAX_BLADES = 4
+        const val MAX_BLADES = 5
     }
 }

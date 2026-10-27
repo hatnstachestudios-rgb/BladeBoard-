@@ -53,8 +53,7 @@ import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StyleBlade(settings: LauncherSettings, repo: AppRepository, bladeTitles: List<String>) {
-    val accent = settings.accentFor(3)
+fun StyleBlade(settings: LauncherSettings, repo: AppRepository, bladeTitles: List<String>, accent: Color) {
     Column(
         Modifier
             .fillMaxSize()

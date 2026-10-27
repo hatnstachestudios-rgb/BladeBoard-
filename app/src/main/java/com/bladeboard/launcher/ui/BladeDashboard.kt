@@ -32,12 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
+import com.bladeboard.launcher.media.MediaRepository
 import com.bladeboard.launcher.ui.blades.AppsBlade
 import com.bladeboard.launcher.ui.blades.HomeBlade
+import com.bladeboard.launcher.ui.blades.MusicBlade
 import com.bladeboard.launcher.ui.blades.QuickBlade
 import com.bladeboard.launcher.ui.blades.StyleBlade
 
-private val BladeTitles = listOf("home", "apps", "quick", "style")
+private val BladeTitles = listOf("home", "music", "apps", "quick", "style")
 
 /**
  * The blade stack. Every blade is the same width; blades at or left of the selected one sit
@@ -45,7 +47,12 @@ private val BladeTitles = listOf("home", "apps", "quick", "style")
  * right edge. Changing the selection slides them all into their new positions.
  */
 @Composable
-fun BladeDashboard(repo: AppRepository, settings: LauncherSettings, homePresses: Int) {
+fun BladeDashboard(
+    repo: AppRepository,
+    media: MediaRepository,
+    settings: LauncherSettings,
+    homePresses: Int,
+) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
     val go: (Int) -> Unit = { selected = it.coerceIn(0, BladeTitles.lastIndex) }
 
@@ -119,9 +126,10 @@ fun BladeDashboard(repo: AppRepository, settings: LauncherSettings, homePresses:
                     ) {
                         when (i) {
                             0 -> HomeBlade(repo, settings, accent)
-                            1 -> AppsBlade(repo, settings, accent)
-                            2 -> QuickBlade(repo, accent)
-                            else -> StyleBlade(settings, repo, BladeTitles)
+                            1 -> MusicBlade(media, repo, settings, accent)
+                            2 -> AppsBlade(repo, settings, accent)
+                            3 -> QuickBlade(repo, accent)
+                            else -> StyleBlade(settings, repo, BladeTitles, accent)
                         }
                     }
                 }
