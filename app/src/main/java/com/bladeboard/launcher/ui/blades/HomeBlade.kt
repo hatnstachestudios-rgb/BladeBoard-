@@ -32,12 +32,15 @@ import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.ui.AppTile
 import com.bladeboard.launcher.ui.BladeHeader
+import com.bladeboard.launcher.ui.UpdateBanner
+import com.bladeboard.launcher.update.UpdateManager
+import com.bladeboard.launcher.update.UpdateState
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun HomeBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
+fun HomeBlade(repo: AppRepository, settings: LauncherSettings, updates: UpdateManager, accent: Color) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -51,6 +54,7 @@ fun HomeBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
     val pinned = settings.favorites.mapNotNull { key -> repo.apps.firstOrNull { it.key == key } }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp)) {
+        UpdateBanner(updates, accent, Modifier.padding(bottom = 16.dp))
         Column(
             Modifier.clickable { repo.openIntent(Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
         ) {

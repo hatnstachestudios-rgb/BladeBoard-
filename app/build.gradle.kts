@@ -12,11 +12,28 @@ android {
         applicationId = "com.bladeboard.launcher"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI sets the run number so every build is a newer version the updater can detect.
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.1.$build"
+    }
+
+    // One permanent key so each build can install over the last. Its password lives only in
+    // the KEYSTORE_PASSWORD repo secret.
+    val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+    signingConfigs {
+        create("bladeboard") {
+            storeFile = file("bladeboard.jks")
+            storePassword = keystorePassword
+            keyAlias = "bladeboard"
+            keyPassword = keystorePassword
+        }
     }
 
     buildTypes {
+        debug {
+            if (!keystorePassword.isNullOrEmpty()) signingConfig = signingConfigs.getByName("bladeboard")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(

@@ -12,6 +12,7 @@ import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.media.MediaRepository
 import com.bladeboard.launcher.ui.BladeDashboard
 import com.bladeboard.launcher.ui.theme.BladeboardTheme
+import com.bladeboard.launcher.update.UpdateManager
 import com.bladeboard.launcher.widgets.WidgetHostManager
 
 class MainActivity : ComponentActivity() {
@@ -19,6 +20,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var settings: LauncherSettings
     private lateinit var media: MediaRepository
     private lateinit var widgets: WidgetHostManager
+    private lateinit var updates: UpdateManager
 
     // Bumped each time the Home button is pressed while we're already the foreground app.
     private val homePresses = mutableIntStateOf(0)
@@ -31,6 +33,7 @@ class MainActivity : ComponentActivity() {
         repo = AppRepository(this).also { it.start() }
         media = MediaRepository(this)
         widgets = WidgetHostManager(this, settings)
+        updates = UpdateManager(this)
 
         setContent {
             BladeboardTheme(settings) {
@@ -38,6 +41,7 @@ class MainActivity : ComponentActivity() {
                     repo = repo,
                     media = media,
                     widgets = widgets,
+                    updates = updates,
                     settings = settings,
                     homePresses = homePresses.intValue,
                 )
@@ -74,6 +78,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Picks up newly granted notification access and the current player.
         media.refresh()
+        updates.onResume()
+        updates.checkIfDue(autoInstall = settings.autoUpdate)
     }
 
     override fun onDestroy() {

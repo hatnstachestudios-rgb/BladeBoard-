@@ -49,11 +49,20 @@ import com.bladeboard.launcher.data.BackgroundStyle
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.data.Palettes
 import com.bladeboard.launcher.ui.BladeHeader
+import com.bladeboard.launcher.ui.UpdateBanner
+import com.bladeboard.launcher.update.UpdateManager
+import com.bladeboard.launcher.update.UpdateState
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StyleBlade(settings: LauncherSettings, repo: AppRepository, bladeTitles: List<String>, accent: Color) {
+fun StyleBlade(
+    settings: LauncherSettings,
+    repo: AppRepository,
+    updates: UpdateManager,
+    bladeTitles: List<String>,
+    accent: Color,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -128,6 +137,22 @@ fun StyleBlade(settings: LauncherSettings, repo: AppRepository, bladeTitles: Lis
         LabeledSwitch("Show app labels", settings.showLabels, accent) { settings.showLabels = it }
         LabeledSwitch("Blade depth effect", settings.bladeDepth, accent) { settings.bladeDepth = it }
         LabeledSwitch("24-hour clock", settings.use24h, accent) { settings.use24h = it }
+
+        // --- Updates ---
+        BladeHeader("Updates", accent)
+        UpdateBanner(updates, accent)
+        LabeledSwitch("Install updates automatically", settings.autoUpdate, accent) { settings.autoUpdate = it }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val status = when (updates.state) {
+                is UpdateState.Checking -> "Checking…"
+                is UpdateState.UpToDate -> "Up to date"
+                else -> ""
+            }
+            Text("Build ${updates.currentBuild}" + if (status.isNotEmpty()) " · $status" else "", fontSize = 14.sp, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = { updates.check(autoInstall = settings.autoUpdate) }) {
+                Text("Check now", color = Color.White)
+            }
+        }
 
         Spacer(Modifier.height(4.dp))
         Button(
