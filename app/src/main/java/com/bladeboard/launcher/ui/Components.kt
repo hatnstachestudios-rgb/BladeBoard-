@@ -159,7 +159,6 @@ fun Modifier.dashboardBackground(settings: LauncherSettings): Modifier = compose
 @Composable
 fun AppTile(app: AppEntry, repo: AppRepository, settings: LauncherSettings, accent: Color) {
     var menuOpen by remember { mutableStateOf(false) }
-    val pinned = settings.isFavorite(app.key)
     Box {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -185,14 +184,21 @@ fun AppTile(app: AppEntry, repo: AppRepository, settings: LauncherSettings, acce
                 )
             }
         }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(
-                text = { Text(if (pinned) "Unpin from Home" else "Pin to Home") },
-                onClick = { settings.toggleFavorite(app.key); menuOpen = false },
-            )
-            DropdownMenuItem(text = { Text("App info") }, onClick = { repo.openAppInfo(app); menuOpen = false })
-            DropdownMenuItem(text = { Text("Uninstall") }, onClick = { repo.uninstall(app); menuOpen = false })
-        }
+        AppMenu(app, repo, settings, menuOpen) { menuOpen = false }
+    }
+}
+
+/** Long-press options shared by every app surface. */
+@Composable
+fun AppMenu(app: AppEntry, repo: AppRepository, settings: LauncherSettings, expanded: Boolean, onDismiss: () -> Unit) {
+    val pinned = settings.isFavorite(app.key)
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(if (pinned) "Unpin from Home" else "Pin to Home") },
+            onClick = { settings.toggleFavorite(app.key); onDismiss() },
+        )
+        DropdownMenuItem(text = { Text("App info") }, onClick = { repo.openAppInfo(app); onDismiss() })
+        DropdownMenuItem(text = { Text("Uninstall") }, onClick = { repo.uninstall(app); onDismiss() })
     }
 }
 

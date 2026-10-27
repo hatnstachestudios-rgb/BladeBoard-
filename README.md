@@ -8,7 +8,7 @@ A customizable Android home screen built around sliding "blades": full-height pa
 |-------|--------------|
 | **Home** | Big clock + date (tap for alarms), grid of pinned apps |
 | **Music** | Now playing from any player (Musicolet, Spotify…): artwork, seek bar, play/pause/skip, default player launcher. Needs Notification access |
-| **Apps** | Searchable app drawer; Enter launches the top match; long-press for Pin / App info / Uninstall |
+| **Apps** | Two-row cover carousel (cards tinted from each icon, centered focus, reflection, name bar) or classic grid; search; Enter launches the top match; long-press for Pin / App info / Uninstall |
 | **Quick** | Shortcut tiles: Wi-Fi, Bluetooth, display, sound, battery, wallpaper, default home, settings |
 | **Style** | Every customization option, applied live |
 

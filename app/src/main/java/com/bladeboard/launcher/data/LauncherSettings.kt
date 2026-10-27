@@ -69,6 +69,7 @@ class LauncherSettings(context: Context) {
     var use24h by boolPref("use_24h", false)
     var bladeDepth by boolPref("blade_depth", true)
     var musicAppKey by stringPref("music_app", "")
+    var appsCarousel by boolPref("apps_carousel", true)
 
     private var backgroundName by stringPref("background", BackgroundStyle.GRADIENT.name)
     var backgroundStyle: BackgroundStyle
@@ -107,7 +108,7 @@ class LauncherSettings(context: Context) {
 
     fun resetLook() {
         paletteIndex = 0; iconSizeDp = 52; gridColumns = 4; tabWidthDp = 34
-        showLabels = true; use24h = false; bladeDepth = true
+        showLabels = true; use24h = false; bladeDepth = true; appsCarousel = true
         backgroundStyle = BackgroundStyle.GRADIENT
         repeat(MAX_BLADES) { setAccentOverride(it, -1) }
     }

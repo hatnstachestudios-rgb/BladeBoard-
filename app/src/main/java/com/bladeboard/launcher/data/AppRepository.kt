@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.LauncherApps
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -12,6 +13,7 @@ import android.os.UserHandle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
@@ -29,6 +31,8 @@ data class AppEntry(
     val component: ComponentName,
     val user: UserHandle,
     val icon: ImageBitmap,
+    /** Average color of the icon, used to tint carousel cards. */
+    val tint: Color,
 )
 
 /** Loads launchable apps and keeps the list fresh as apps are installed or removed. */
@@ -67,19 +71,38 @@ class AppRepository(private val context: Context) {
 
     private fun load(): List<AppEntry> {
         val user = Process.myUserHandle()
-        val iconPx = (72 * context.resources.displayMetrics.density).toInt()
+        val iconPx = (96 * context.resources.displayMetrics.density).toInt()
         return launcherApps.getActivityList(null, user)
             .filter { it.componentName.packageName != context.packageName }
             .map { info ->
+                val bmp = info.getBadgedIcon(0).toBitmap(iconPx, iconPx)
                 AppEntry(
                     key = info.componentName.flattenToString(),
                     label = info.label.toString(),
                     component = info.componentName,
                     user = info.user,
-                    icon = info.getBadgedIcon(0).toBitmap(iconPx, iconPx).asImageBitmap(),
+                    icon = bmp.asImageBitmap(),
+                    tint = averageColor(bmp),
                 )
             }
             .sortedBy { it.label.lowercase() }
+    }
+
+    /** Mean of the opaque pixels, sampled from a tiny downscale; boosted a little so cards aren't muddy. */
+    private fun averageColor(bmp: Bitmap): Color {
+        val small = Bitmap.createScaledBitmap(bmp, 12, 12, true)
+        var r = 0L; var g = 0L; var b = 0L; var n = 0
+        for (x in 0 until 12) for (y in 0 until 12) {
+            val p = small.getPixel(x, y)
+            if (android.graphics.Color.alpha(p) < 128) continue
+            r += android.graphics.Color.red(p); g += android.graphics.Color.green(p); b += android.graphics.Color.blue(p); n++
+        }
+        if (n == 0) return Color(0xFF3A4250)
+        val hsv = FloatArray(3)
+        android.graphics.Color.RGBToHSV((r / n).toInt(), (g / n).toInt(), (b / n).toInt(), hsv)
+        hsv[1] = (hsv[1] * 1.3f).coerceAtMost(1f)
+        hsv[2] = hsv[2].coerceIn(0.35f, 0.85f)
+        return Color(android.graphics.Color.HSVToColor(hsv))
     }
 
     fun launch(app: AppEntry) {
