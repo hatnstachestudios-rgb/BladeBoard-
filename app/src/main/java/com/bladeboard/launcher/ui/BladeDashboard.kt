@@ -62,7 +62,8 @@ fun BladeDashboard(repo: AppRepository, settings: LauncherSettings, homePresses:
         ) {
             val count = BladeTitles.size
             val tabW = settings.tabWidthDp.dp
-            val bladeW = maxWidth - tabW * (count - 1)
+            val fullW = maxWidth
+            val bladeW = fullW - tabW * (count - 1)
             val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
             var dragTotal by remember { mutableFloatStateOf(0f) }
 
@@ -82,7 +83,7 @@ fun BladeDashboard(repo: AppRepository, settings: LauncherSettings, homePresses:
             ) {
                 BladeTitles.forEachIndexed { i, title ->
                     val active = i == selected
-                    val targetX = if (i <= selected) tabW * i else maxWidth - tabW * (count - i)
+                    val targetX = if (i <= selected) tabW * i else fullW - tabW * (count - i)
                     val x by animateDpAsState(
                         targetValue = targetX,
                         animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
