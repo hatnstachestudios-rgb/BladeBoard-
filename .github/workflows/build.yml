@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,3 +40,15 @@ jobs:
         with:
           name: Bladeboard-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      # Newest main build is always at Releases → "Latest build" as a plain .apk.
+      - name: Publish APK release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Bladeboard.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Bladeboard.apk \
+            --title "Latest build" \
+            --notes "Debug build from commit ${GITHUB_SHA::7}. Download Bladeboard.apk below and open it to install."
