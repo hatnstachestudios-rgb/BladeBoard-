@@ -31,7 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +52,16 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import com.bladeboard.launcher.data.AppEntry
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.BackgroundStyle
@@ -61,25 +70,43 @@ import com.bladeboard.launcher.ui.theme.BladeSurface
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** One blade: a colored tab strip on its left edge and a glassy content panel. */
+/**
+ * One blade: a tab strip on its left edge plus the content panel.
+ *
+ * Classic style: solid-color tab, curved left edge (bows right on the left stack and the open
+ * blade, bows left on the right stack, so the open panel flares at its corners), and a full
+ * color gradient panel with arched top and bottom. Glass style: straight dark translucent panel.
+ */
 @Composable
 fun Blade(
     title: String,
     accent: Color,
     active: Boolean,
+    onRight: Boolean,
+    classic: Boolean,
     tabWidth: Dp,
+    curve: Dp,
     onTabClick: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val tabText = if (accent.luminance() > 0.5f) Color(0xFF111111) else Color.White
-    Row(modifier.shadow(if (active) 28.dp else 10.dp)) {
+    // +1 = edge bows toward the right, -1 = toward the left. Animated so blades bend as they slide.
+    val bulge by animateFloatAsState(if (onRight) -1f else 1f, label = "bladeBulge")
+    val density = LocalDensity.current
+    val curvePx = if (classic) with(density) { curve.toPx() } else 0f
+    val shape = remember(bulge, curvePx) { BladeEdgeShape(bulge, curvePx) }
+    // Shift the tab label so it stays centered on the visible part of the curved strip.
+    val labelShift = if (classic) curve * ((1f + bulge) / 2f) else 0.dp
+
+    Row(modifier.shadow(if (active) 28.dp else 10.dp, shape).clip(shape)) {
         Box(
             Modifier
                 .width(tabWidth)
                 .fillMaxHeight()
-                .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.78f))))
-                .clickable(onClick = onTabClick),
+                .background(if (classic) Brush.horizontalGradient(listOf(accent, accent)) else Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.78f))))
+                .clickable(onClick = onTabClick)
+                .padding(start = labelShift),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -90,16 +117,33 @@ fun Blade(
                 letterSpacing = 4.sp,
                 maxLines = 1,
                 softWrap = false,
-                modifier = Modifier.verticalText(),
+                // Left stack reads top-to-bottom, right stack bottom-to-top, facing the open blade.
+                modifier = Modifier.verticalText(clockwise = classic && !onRight),
             )
         }
-        Box(
+        val body = if (classic) {
+            val arch = with(density) { (curve * 1.6f).toPx() }
             Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .background(accent.darken(0.32f))
+                .clip(remember(arch) { ArchShape(arch) })
+                .background(
+                    Brush.linearGradient(
+                        listOf(accent.lighten(0.18f), accent, accent.darken(0.5f)),
+                        start = Offset.Zero,
+                        end = Offset.Infinite,
+                    )
+                )
+                .drawBehind {
+                    // Soft sheen in the upper left, plus a gentle scrim at the bottom for legibility.
+                    drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.22f), Color.Transparent), center = Offset(size.width * 0.2f, size.height * 0.1f), radius = size.maxDimension * 0.7f))
+                    drawRect(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.35f)))
+                }
+        } else {
+            Modifier
                 .background(BladeSurface)
                 .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.22f), Color.Transparent)))
-        ) {
+        }
+        Box(Modifier.weight(1f).fillMaxHeight().then(body)) {
             // Only compose content for the visible blade; fade it in and out.
             val alpha by animateFloatAsState(if (active) 1f else 0f, label = "bladeContent")
             if (active || alpha > 0.01f) {
@@ -109,8 +153,45 @@ fun Blade(
     }
 }
 
-/** Rotates text 90° counter-clockwise and swaps its measured width/height. */
-fun Modifier.verticalText(): Modifier = this
+/** Blade outline whose left edge is a quadratic curve; [bulge] in -1..1 picks the direction. */
+private class BladeEdgeShape(private val bulge: Float, private val curve: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        if (curve <= 0f) return Outline.Rectangle(Rect(Offset.Zero, size))
+        val ends = curve * (1f - bulge) / 2f
+        val middle = curve * (1f + bulge) / 2f
+        val control = 2f * middle - ends
+        val path = Path().apply {
+            moveTo(ends, 0f)
+            quadraticBezierTo(control, size.height / 2f, ends, size.height)
+            lineTo(size.width, size.height)
+            lineTo(size.width, 0f)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
+
+/** Panel whose top and bottom edges arch toward the center, leaving flared corners. */
+private class ArchShape(private val arch: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            moveTo(0f, 0f)
+            quadraticBezierTo(w / 2f, 2f * arch, w, 0f)
+            lineTo(w, h)
+            quadraticBezierTo(w / 2f, h - 2f * arch, 0f, h)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
+
+private fun Color.darken(amount: Float) = Color(red * (1 - amount), green * (1 - amount), blue * (1 - amount), alpha)
+private fun Color.lighten(amount: Float) = Color(red + (1 - red) * amount, green + (1 - green) * amount, blue + (1 - blue) * amount, alpha)
+
+/** Rotates text 90° (clockwise = reads top-to-bottom) and swaps its measured width/height. */
+fun Modifier.verticalText(clockwise: Boolean = false): Modifier = this
     .layout { measurable, constraints ->
         val maxW = if (constraints.hasBoundedHeight) constraints.maxHeight else Constraints.Infinity
         val p = measurable.measure(Constraints(maxWidth = maxW))
@@ -118,7 +199,7 @@ fun Modifier.verticalText(): Modifier = this
             p.place(x = -(p.width - p.height) / 2, y = (p.width - p.height) / 2)
         }
     }
-    .rotate(-90f)
+    .rotate(if (clockwise) 90f else -90f)
 
 /** Gradient / solid / wallpaper backdrop, with a slow drifting glow in gradient mode. */
 fun Modifier.dashboardBackground(settings: LauncherSettings): Modifier = composed {
