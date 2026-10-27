@@ -33,6 +33,7 @@ import androidx.compose.ui.zIndex
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.media.MediaRepository
+import com.bladeboard.launcher.widgets.WidgetHostManager
 import com.bladeboard.launcher.ui.blades.AppsBlade
 import com.bladeboard.launcher.ui.blades.HomeBlade
 import com.bladeboard.launcher.ui.blades.MusicBlade
@@ -50,6 +51,7 @@ private val BladeTitles = listOf("home", "music", "apps", "quick", "style")
 fun BladeDashboard(
     repo: AppRepository,
     media: MediaRepository,
+    widgets: WidgetHostManager,
     settings: LauncherSettings,
     homePresses: Int,
 ) {
@@ -126,7 +128,7 @@ fun BladeDashboard(
                     ) {
                         when (i) {
                             0 -> HomeBlade(repo, settings, accent)
-                            1 -> MusicBlade(media, repo, settings, accent)
+                            1 -> MusicBlade(media, widgets, repo, settings, accent)
                             2 -> AppsBlade(repo, settings, accent)
                             3 -> QuickBlade(repo, accent)
                             else -> StyleBlade(settings, repo, BladeTitles, accent)

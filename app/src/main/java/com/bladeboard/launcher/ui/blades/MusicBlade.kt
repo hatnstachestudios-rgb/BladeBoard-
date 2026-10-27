@@ -62,10 +62,17 @@ import com.bladeboard.launcher.media.MediaRepository
 import com.bladeboard.launcher.media.NowPlaying
 import com.bladeboard.launcher.ui.BladeHeader
 import com.bladeboard.launcher.ui.MediaIcons
+import com.bladeboard.launcher.widgets.WidgetHostManager
 import kotlinx.coroutines.delay
 
 @Composable
-fun MusicBlade(media: MediaRepository, repo: AppRepository, settings: LauncherSettings, accent: Color) {
+fun MusicBlade(
+    media: MediaRepository,
+    widgets: WidgetHostManager,
+    repo: AppRepository,
+    settings: LauncherSettings,
+    accent: Color,
+) {
     val defaultApp = repo.apps.firstOrNull { it.key == settings.musicAppKey }
 
     Column(
@@ -75,14 +82,19 @@ fun MusicBlade(media: MediaRepository, repo: AppRepository, settings: LauncherSe
             .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        BladeHeader("Now playing", accent)
-
-        val np = media.nowPlaying
-        when {
-            !media.hasAccess -> AccessCard(repo, accent)
-            np == null -> IdleCard(defaultApp, repo, accent)
-            else -> PlayerCard(np, media, repo, accent)
+        // With widgets added, the built-in player card can be hidden so the app's own widgets take over.
+        if (settings.showPlayerCard || settings.musicWidgets.isEmpty()) {
+            BladeHeader("Now playing", accent)
+            val np = media.nowPlaying
+            when {
+                !media.hasAccess -> AccessCard(repo, accent)
+                np == null -> IdleCard(defaultApp, repo, accent)
+                else -> PlayerCard(np, media, repo, accent)
+            }
+            Spacer(Modifier.height(8.dp))
         }
+
+        WidgetSection(widgets, settings, defaultApp?.component?.packageName, accent)
 
         Spacer(Modifier.height(8.dp))
         BladeHeader("Default player", accent)

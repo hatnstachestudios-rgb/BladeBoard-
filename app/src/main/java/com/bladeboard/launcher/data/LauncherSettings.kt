@@ -13,6 +13,8 @@ import kotlin.reflect.KProperty
 enum class BackgroundStyle { GRADIENT, WALLPAPER, SOLID }
 
 /** A named color scheme: two background stops plus one accent per blade. */
+data class HostedWidget(val id: Int, val heightDp: Int)
+
 data class Palette(
     val name: String,
     val bgTop: Color,
@@ -70,6 +72,36 @@ class LauncherSettings(context: Context) {
     var bladeDepth by boolPref("blade_depth", true)
     var musicAppKey by stringPref("music_app", "")
     var appsCarousel by boolPref("apps_carousel", true)
+    var showPlayerCard by boolPref("show_player_card", true)
+
+    // Widgets hosted on the Music blade, top to bottom. Stored as "id:heightDp|id:heightDp".
+    var musicWidgets by mutableStateOf(
+        prefs.getString("music_widgets", "").orEmpty().split('|').mapNotNull { entry ->
+            val parts = entry.split(':')
+            val id = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+            HostedWidget(id, parts.getOrNull(1)?.toIntOrNull() ?: 180)
+        }
+    )
+        private set
+
+    private fun saveWidgets(list: List<HostedWidget>) {
+        musicWidgets = list
+        prefs.edit().putString("music_widgets", list.joinToString("|") { "${it.id}:${it.heightDp}" }).apply()
+    }
+
+    fun addWidget(id: Int, heightDp: Int) = saveWidgets(musicWidgets + HostedWidget(id, heightDp))
+    fun removeWidget(id: Int) = saveWidgets(musicWidgets.filterNot { it.id == id })
+
+    fun resizeWidget(id: Int, deltaDp: Int) = saveWidgets(
+        musicWidgets.map { if (it.id == id) it.copy(heightDp = (it.heightDp + deltaDp).coerceIn(80, 640)) else it }
+    )
+
+    fun moveWidget(id: Int, direction: Int) {
+        val i = musicWidgets.indexOfFirst { it.id == id }
+        val j = i + direction
+        if (i < 0 || j !in musicWidgets.indices) return
+        saveWidgets(musicWidgets.toMutableList().also { java.util.Collections.swap(it, i, j) })
+    }
 
     private var backgroundName by stringPref("background", BackgroundStyle.GRADIENT.name)
     var backgroundStyle: BackgroundStyle

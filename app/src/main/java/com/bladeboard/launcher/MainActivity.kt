@@ -12,11 +12,13 @@ import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.media.MediaRepository
 import com.bladeboard.launcher.ui.BladeDashboard
 import com.bladeboard.launcher.ui.theme.BladeboardTheme
+import com.bladeboard.launcher.widgets.WidgetHostManager
 
 class MainActivity : ComponentActivity() {
     private lateinit var repo: AppRepository
     private lateinit var settings: LauncherSettings
     private lateinit var media: MediaRepository
+    private lateinit var widgets: WidgetHostManager
 
     // Bumped each time the Home button is pressed while we're already the foreground app.
     private val homePresses = mutableIntStateOf(0)
@@ -28,10 +30,17 @@ class MainActivity : ComponentActivity() {
         settings = LauncherSettings(this)
         repo = AppRepository(this).also { it.start() }
         media = MediaRepository(this)
+        widgets = WidgetHostManager(this, settings)
 
         setContent {
             BladeboardTheme(settings) {
-                BladeDashboard(repo = repo, media = media, settings = settings, homePresses = homePresses.intValue)
+                BladeDashboard(
+                    repo = repo,
+                    media = media,
+                    widgets = widgets,
+                    settings = settings,
+                    homePresses = homePresses.intValue,
+                )
             }
         }
     }
@@ -42,6 +51,23 @@ class MainActivity : ComponentActivity() {
         // so returning from another app keeps you on the blade you left.
         val alreadyVisible = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
         if (intent.hasCategory(Intent.CATEGORY_HOME) && alreadyVisible) homePresses.intValue++
+    }
+
+    override fun onStart() {
+        super.onStart()
+        widgets.startListening()
+    }
+
+    override fun onStop() {
+        widgets.stopListening()
+        super.onStop()
+    }
+
+    @Deprecated("Widget configuration screens still report back through this callback.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        widgets.onActivityResult(requestCode, resultCode)
     }
 
     override fun onResume() {
