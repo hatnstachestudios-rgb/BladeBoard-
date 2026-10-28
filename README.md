@@ -10,6 +10,7 @@ A customizable Android home screen built around sliding "blades": full-height pa
 | **Music** | Now playing from any player (Musicolet, Spotify…): artwork, seek bar, play/pause/skip, default player launcher, plus hosted app widgets (Musicolet first) you can resize and reorder. Needs Notification access |
 | **Apps** | Two-row cover carousel (cards tinted from each icon, centered focus, reflection, name bar) or classic grid; search; Enter launches the top match; long-press for Pin / App info / Uninstall |
 | **Quick** | Shortcut tiles: Wi-Fi, Bluetooth, display, sound, battery, wallpaper, default home, settings |
+| **Clock** | Next alarm, set alarms (time, repeat days, label) straight into your clock app, and a stopwatch with laps that keeps running in the background |
 | **Style** | Every customization option, applied live |
 
 Navigate by swiping left/right or tapping a blade's tab. Back and Home both return to the Home blade.

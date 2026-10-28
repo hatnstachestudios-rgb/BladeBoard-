@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.lifecycle.Lifecycle
+import com.bladeboard.launcher.clock.Stopwatch
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.media.MediaRepository
@@ -21,6 +22,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var media: MediaRepository
     private lateinit var widgets: WidgetHostManager
     private lateinit var updates: UpdateManager
+    private lateinit var stopwatch: Stopwatch
 
     // Bumped each time the Home button is pressed while we're already the foreground app.
     private val homePresses = mutableIntStateOf(0)
@@ -34,6 +36,7 @@ class MainActivity : ComponentActivity() {
         media = MediaRepository(this)
         widgets = WidgetHostManager(this, settings)
         updates = UpdateManager(this)
+        stopwatch = Stopwatch(this)
 
         setContent {
             BladeboardTheme(settings) {
@@ -42,6 +45,7 @@ class MainActivity : ComponentActivity() {
                     media = media,
                     widgets = widgets,
                     updates = updates,
+                    stopwatch = stopwatch,
                     settings = settings,
                     homePresses = homePresses.intValue,
                 )

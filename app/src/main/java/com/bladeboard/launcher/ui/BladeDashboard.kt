@@ -39,10 +39,12 @@ import com.bladeboard.launcher.widgets.WidgetHostManager
 import com.bladeboard.launcher.ui.blades.AppsBlade
 import com.bladeboard.launcher.ui.blades.HomeBlade
 import com.bladeboard.launcher.ui.blades.MusicBlade
+import com.bladeboard.launcher.ui.blades.ClockBlade
+import com.bladeboard.launcher.clock.Stopwatch
 import com.bladeboard.launcher.ui.blades.QuickBlade
 import com.bladeboard.launcher.ui.blades.StyleBlade
 
-private val BladeTitles = listOf("home", "music", "apps", "quick", "style")
+private val BladeTitles = listOf("home", "music", "apps", "quick", "clock", "style")
 
 /**
  * The blade stack. Every blade is the same width; blades at or left of the selected one sit
@@ -55,6 +57,7 @@ fun BladeDashboard(
     media: MediaRepository,
     widgets: WidgetHostManager,
     updates: UpdateManager,
+    stopwatch: Stopwatch,
     settings: LauncherSettings,
     homePresses: Int,
 ) {
@@ -143,6 +146,7 @@ fun BladeDashboard(
                             1 -> MusicBlade(media, widgets, repo, settings, accent)
                             2 -> AppsBlade(repo, settings, accent)
                             3 -> QuickBlade(repo, settings, accent)
+                            4 -> ClockBlade(stopwatch, repo, settings, accent)
                             else -> StyleBlade(settings, repo, updates, BladeTitles, accent)
                         }
                     }

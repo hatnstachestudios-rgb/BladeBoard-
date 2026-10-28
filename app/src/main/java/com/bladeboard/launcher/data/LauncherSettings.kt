@@ -127,6 +127,17 @@ class LauncherSettings(context: Context) {
 
     val palette: Palette get() = Palettes.all[paletteIndex.coerceIn(0, Palettes.all.lastIndex)]
 
+    // The Clock blade took slot 4, so Style moved to 5: carry its saved colors over once.
+    init {
+        if (prefs.getInt("blade_layout", 1) < 2) {
+            val e = prefs.edit()
+            listOf("accent_", "panel_").forEach { k ->
+                if (prefs.contains("${k}4")) e.putInt("${k}5", prefs.getInt("${k}4", -1)).remove("${k}4")
+            }
+            e.putInt("blade_layout", 2).commit()
+        }
+    }
+
     // Per-blade accent override: -1 means "use the palette's color".
     private val accentOverrides = List(MAX_BLADES) { i -> mutableIntStateOf(prefs.getInt("accent_$i", -1)) }
 
@@ -208,6 +219,6 @@ class LauncherSettings(context: Context) {
     }
 
     companion object {
-        const val MAX_BLADES = 5
+        const val MAX_BLADES = 6
     }
 }
