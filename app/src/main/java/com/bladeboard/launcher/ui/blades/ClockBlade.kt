@@ -53,6 +53,14 @@ import com.bladeboard.launcher.clock.formatStopwatch
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.ui.BladeHeader
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.pointerInput
+import com.bladeboard.launcher.ui.AutoSizeText
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.android.awaitFrame
 import java.time.Instant
 import java.time.LocalTime
@@ -65,7 +73,7 @@ fun ClockBlade(stopwatch: Stopwatch, repo: AppRepository, settings: LauncherSett
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .padding(horizontal = 14.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         BladeHeader("Alarms", accent)
@@ -86,33 +94,32 @@ private fun NextAlarmCard(repo: AppRepository, settings: LauncherSettings, accen
     LaunchedEffect(Unit) {
         while (true) {
             next = context.getSystemService(AlarmManager::class.java)?.nextAlarmClock?.triggerTime
-            kotlinx.coroutines.delay(5_000)
+            delay(5_000)
         }
     }
     val timeFmt = remember(settings.use24h) { DateTimeFormatter.ofPattern(if (settings.use24h) "HH:mm" else "h:mm a") }
     val dayFmt = remember { DateTimeFormatter.ofPattern("EEEE") }
 
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(alpha = 0.22f))
             .clickable { repo.openIntent(Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(12.dp),
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.fillMaxWidth()) {
             Text("Next alarm", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
             val t = next
             if (t == null) {
                 Text("None set", fontSize = 26.sp, fontWeight = FontWeight.Light)
             } else {
                 val at = Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault())
-                Text(at.format(timeFmt), fontSize = 34.sp, fontWeight = FontWeight.Light)
+                AutoSizeText(at.format(timeFmt), maxFontSize = 34.sp, fontWeight = FontWeight.Light)
                 Text("${at.format(dayFmt)} · in ${untilText(t)}", fontSize = 13.sp, color = accent)
             }
         }
-        Text("All alarms ›", fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f))
+        Text("All alarms ›", fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 6.dp))
     }
 }
 
@@ -142,54 +149,55 @@ private fun NewAlarmCard(repo: AppRepository, settings: LauncherSettings, accent
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(alpha = 0.22f))
-            .padding(16.dp),
+            .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("New alarm", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
 
-        // Hour : minute steppers, plus AM/PM in 12-hour mode.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        // Hour : minute, each with up/down arrows (hold to scroll fast), plus AM/PM in 12-hour mode.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val shownHour = if (settings.use24h) hour else (hour % 12).let { if (it == 0) 12 else it }
             Stepper(
                 value = if (settings.use24h) "%02d".format(shownHour) else "$shownHour",
                 accent = accent,
                 onUp = { hour = (hour + 1) % 24 },
                 onDown = { hour = (hour + 23) % 24 },
+                modifier = Modifier.weight(1f),
             )
-            Text(":", fontSize = 40.sp, fontWeight = FontWeight.Light, modifier = Modifier.padding(horizontal = 6.dp))
+            Text(":", fontSize = 32.sp, fontWeight = FontWeight.Light, modifier = Modifier.padding(horizontal = 2.dp))
             Stepper(
                 value = "%02d".format(minute),
                 accent = accent,
                 onUp = { minute = (minute + 1) % 60 },
                 onDown = { minute = (minute + 59) % 60 },
-                onBigUp = { minute = (minute + 5) % 60 },
-                onBigDown = { minute = (minute + 55) % 60 },
+                modifier = Modifier.weight(1f),
             )
             if (!settings.use24h) {
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(6.dp))
                 Box(
                     Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .border(1.5.dp, accent, RoundedCornerShape(10.dp))
                         .clickable { hour = (hour + 12) % 24 }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) { Text(if (hour < 12) "AM" else "PM", fontWeight = FontWeight.SemiBold) }
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                ) { Text(if (hour < 12) "AM" else "PM", fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
             }
         }
 
         // Repeat days (Calendar.SUNDAY = 1 … SATURDAY = 7).
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("S", "M", "T", "W", "T", "F", "S").forEachIndexed { i, d ->
                 val day = i + 1
                 val on = day in days
                 Box(
                     Modifier
-                        .size(34.dp)
+                        .weight(1f)
+                        .aspectRatio(1f)
                         .clip(CircleShape)
                         .background(if (on) accent else Color.White.copy(alpha = 0.08f))
                         .clickable { days = if (on) days - day else days + day },
                     contentAlignment = Alignment.Center,
-                ) { Text(d, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.Black else Color.White) }
+                ) { Text(d, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) Color.Black else Color.White) }
             }
         }
 
@@ -230,25 +238,49 @@ private fun Stepper(
     accent: Color,
     onUp: () -> Unit,
     onDown: () -> Unit,
-    onBigUp: (() -> Unit)? = null,
-    onBigDown: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row {
-            StepButton("▲", accent, onUp)
-            if (onBigUp != null) StepButton("+5", accent, onBigUp)
-        }
-        Text(value, fontSize = 48.sp, fontWeight = FontWeight.Light, fontFamily = FontFamily.Monospace)
-        Row {
-            StepButton("▼", accent, onDown)
-            if (onBigDown != null) StepButton("−5", accent, onBigDown)
-        }
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        RepeatArrow("▲", accent, onUp)
+        AutoSizeText(
+            value,
+            maxFontSize = 52.sp,
+            fontWeight = FontWeight.Light,
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.Center,
+        )
+        RepeatArrow("▼", accent, onDown)
     }
 }
 
+/** Arrow that steps once on tap and keeps stepping, faster and faster, while held. */
 @Composable
-private fun StepButton(text: String, accent: Color, onClick: () -> Unit) {
-    TextButton(onClick = onClick) { Text(text, color = accent, fontSize = 14.sp) }
+private fun RepeatArrow(symbol: String, accent: Color, onStep: () -> Unit) {
+    val step by rememberUpdatedState(onStep)
+    val scope = rememberCoroutineScope()
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    step()
+                    val repeater = scope.launch {
+                        delay(400)
+                        var wait = 120L
+                        while (true) {
+                            step()
+                            delay(wait)
+                            wait = (wait - 10).coerceAtLeast(40)
+                        }
+                    }
+                    tryAwaitRelease()
+                    repeater.cancel()
+                })
+            },
+        contentAlignment = Alignment.Center,
+    ) { Text(symbol, color = accent, fontSize = 16.sp) }
 }
 
 @Composable
@@ -268,13 +300,13 @@ private fun StopwatchCard(stopwatch: Stopwatch, accent: Color) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(alpha = 0.22f))
-            .padding(16.dp),
+            .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
+        AutoSizeText(
             formatStopwatch(elapsed),
-            fontSize = 48.sp,
+            maxFontSize = 48.sp,
             fontWeight = FontWeight.Light,
             fontFamily = FontFamily.Monospace,
             textAlign = TextAlign.Center,
@@ -310,9 +342,9 @@ private fun StopwatchCard(stopwatch: Stopwatch, accent: Color) {
                         else -> Color.White
                     }
                     Row(Modifier.fillMaxWidth()) {
-                        Text("Lap ${laps.size - i}", fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.weight(1f))
-                        Text(formatStopwatch(split), fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = color, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                        Text(formatStopwatch(total), fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                        Text("#${laps.size - i}", fontSize = 13.sp, maxLines = 1, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.weight(0.6f))
+                        Text(formatStopwatch(split), fontSize = 12.sp, maxLines = 1, softWrap = false, fontFamily = FontFamily.Monospace, color = color, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                        Text(formatStopwatch(total), fontSize = 12.sp, maxLines = 1, softWrap = false, fontFamily = FontFamily.Monospace, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                     }
                 }
             }

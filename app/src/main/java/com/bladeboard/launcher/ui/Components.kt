@@ -63,6 +63,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.TextUnit
 import com.bladeboard.launcher.data.AppEntry
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.BackgroundStyle
@@ -157,7 +162,13 @@ fun Blade(
             // Only compose content for the visible blade; fade it in and out.
             val alpha by animateFloatAsState(if (active) 1f else 0f, label = "bladeContent")
             if (active || alpha > 0.01f) {
-                Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }) { content() }
+                val archInset = if (classic) curveSize * 1.6f else 0.dp
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(vertical = archInset)
+                        .graphicsLayer { this.alpha = alpha }
+                ) { content() }
             }
         }
     }
@@ -350,6 +361,52 @@ fun AppMenu(app: AppEntry, repo: AppRepository, settings: LauncherSettings, expa
         )
         DropdownMenuItem(text = { Text("App info") }, onClick = { repo.openAppInfo(app); onDismiss() })
         DropdownMenuItem(text = { Text("Uninstall") }, onClick = { repo.uninstall(app); onDismiss() })
+    }
+}
+
+/**
+ * Single-line text that shrinks its font until it fits the available width,
+ * so big numbers never wrap on narrow blades.
+ */
+@Composable
+fun AutoSizeText(
+    text: String,
+    maxFontSize: TextUnit,
+    modifier: Modifier = Modifier,
+    fontWeight: FontWeight? = null,
+    fontFamily: FontFamily? = null,
+    color: Color = Color.Unspecified,
+    textAlign: TextAlign? = null,
+) {
+    BoxWithConstraints(modifier) {
+        val measurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        val maxPx = constraints.maxWidth
+        val size = remember(text, maxPx, maxFontSize, fontWeight, fontFamily) {
+            var s = maxFontSize.value
+            while (s > 10f) {
+                val w = measurer.measure(
+                    text,
+                    TextStyle(fontSize = s.sp, fontWeight = fontWeight, fontFamily = fontFamily),
+                    softWrap = false,
+                    density = density,
+                ).size.width
+                if (w <= maxPx) break
+                s -= 1f
+            }
+            s.sp
+        }
+        Text(
+            text,
+            fontSize = size,
+            fontWeight = fontWeight,
+            fontFamily = fontFamily,
+            color = color,
+            textAlign = textAlign,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
