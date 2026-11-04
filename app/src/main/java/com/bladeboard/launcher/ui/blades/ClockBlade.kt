@@ -53,6 +53,15 @@ import com.bladeboard.launcher.clock.formatStopwatch
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.ui.BladeHeader
+import com.bladeboard.launcher.ui.LocalWideBlade
+import com.bladeboard.launcher.ui.focusRing
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,20 +78,39 @@ import java.time.format.DateTimeFormatter
 
 @Composable
 fun ClockBlade(stopwatch: Stopwatch, repo: AppRepository, settings: LauncherSettings, accent: Color) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 14.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
+    val alarms: @Composable () -> Unit = {
         BladeHeader("Alarms", accent)
         NextAlarmCard(repo, settings, accent)
         NewAlarmCard(repo, settings, accent)
-
-        Spacer(Modifier.height(4.dp))
+    }
+    val stopwatchSection: @Composable () -> Unit = {
         BladeHeader("Stopwatch", accent)
         StopwatchCard(stopwatch, accent)
+    }
+
+    if (LocalWideBlade.current) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) { alarms() }
+            Column(
+                Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) { stopwatchSection() }
+        }
+    } else {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            alarms()
+            Spacer(Modifier.height(4.dp))
+            stopwatchSection()
+        }
     }
 }
 
@@ -103,6 +131,7 @@ private fun NextAlarmCard(repo: AppRepository, settings: LauncherSettings, accen
     Column(
         Modifier
             .fillMaxWidth()
+            .focusRing(accent, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(alpha = 0.22f))
             .clickable { repo.openIntent(Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
@@ -178,6 +207,7 @@ private fun NewAlarmCard(repo: AppRepository, settings: LauncherSettings, accent
                     Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .border(1.5.dp, accent, RoundedCornerShape(10.dp))
+                        .focusRing(accent, RoundedCornerShape(10.dp))
                         .clickable { hour = (hour + 12) % 24 }
                         .padding(horizontal = 8.dp, vertical = 8.dp)
                 ) { Text(if (hour < 12) "AM" else "PM", fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
@@ -193,6 +223,7 @@ private fun NewAlarmCard(repo: AppRepository, settings: LauncherSettings, accent
                     Modifier
                         .weight(1f)
                         .aspectRatio(1f)
+                        .focusRing(accent, CircleShape)
                         .clip(CircleShape)
                         .background(if (on) accent else Color.White.copy(alpha = 0.08f))
                         .clickable { days = if (on) days - day else days + day },
@@ -262,6 +293,12 @@ private fun RepeatArrow(symbol: String, accent: Color, onStep: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .height(36.dp)
+            .focusRing(accent, RoundedCornerShape(10.dp))
+            .onKeyEvent {
+                val select = it.key == Key.DirectionCenter || it.key == Key.Enter || it.key == Key.NumPadEnter
+                if (select && it.type == KeyEventType.KeyDown) { step(); true } else select
+            }
+            .focusable()
             .clip(RoundedCornerShape(10.dp))
             .pointerInput(Unit) {
                 detectTapGestures(onPress = {

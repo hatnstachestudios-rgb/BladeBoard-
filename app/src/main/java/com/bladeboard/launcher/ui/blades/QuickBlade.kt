@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.ui.QuickIcons
+import com.bladeboard.launcher.ui.focusRing
 
 private data class QuickAction(val label: String, val sub: String, val icon: ImageVector, val intent: () -> Intent)
 
@@ -73,7 +74,7 @@ fun QuickBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
         BladeHeader("Quick settings", accent)
         Spacer(Modifier.height(16.dp))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 140.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
@@ -84,6 +85,7 @@ fun QuickBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
                     Modifier
                         .fillMaxWidth()
                         .height(116.dp)
+                        .focusRing(color, RoundedCornerShape(16.dp))
                         .clip(RoundedCornerShape(16.dp))
                         .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))))
                         .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(16.dp))

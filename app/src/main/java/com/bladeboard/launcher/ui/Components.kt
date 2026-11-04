@@ -68,6 +68,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.focus.focusProperties
 import com.bladeboard.launcher.data.AppEntry
 import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.BackgroundStyle
@@ -120,6 +121,8 @@ fun Blade(
                     if (classic) Modifier.tabFinish(finish, accent, seed = title.hashCode())
                     else Modifier.background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.78f))))
                 )
+                // Controllers switch blades with LB/RB, so the D-pad skips over tabs.
+                .focusProperties { canFocus = false }
                 .clickable(onClick = onTabClick)
                 .padding(start = labelShift),
             contentAlignment = Alignment.Center,
@@ -326,6 +329,8 @@ fun AppTile(app: AppEntry, repo: AppRepository, settings: LauncherSettings, acce
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
+                .focusRing(accent)
+                .onOptionsButton { menuOpen = true }
                 .clip(RoundedCornerShape(12.dp))
                 .combinedClickable(
                     onClick = { repo.launch(app) },

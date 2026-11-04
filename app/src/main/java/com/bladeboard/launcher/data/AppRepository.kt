@@ -3,6 +3,7 @@ package com.bladeboard.launcher.data
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.graphics.Bitmap
 import android.net.Uri
@@ -33,6 +34,8 @@ data class AppEntry(
     val icon: ImageBitmap,
     /** Average color of the icon, used to tint carousel cards. */
     val tint: Color,
+    /** The app declares itself a game (Play Store category or the legacy isGame flag). */
+    val isGame: Boolean = false,
 )
 
 /** Loads launchable apps and keeps the list fresh as apps are installed or removed. */
@@ -83,6 +86,10 @@ class AppRepository(private val context: Context) {
                     user = info.user,
                     icon = bmp.asImageBitmap(),
                     tint = averageColor(bmp),
+                    isGame = info.applicationInfo.let {
+                        it.category == ApplicationInfo.CATEGORY_GAME ||
+                            @Suppress("DEPRECATION") (it.flags and ApplicationInfo.FLAG_IS_GAME) != 0
+                    },
                 )
             }
             .sortedBy { it.label.lowercase() }

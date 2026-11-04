@@ -14,6 +14,24 @@ enum class BackgroundStyle { GRADIENT, WALLPAPER, SOLID }
 
 enum class TabFinish { FLAT, METALLIC, GLOSS, SPARKLE }
 
+/**
+ * Every blade has a fixed [slot] used for its saved colors, so adding or hiding blades never
+ * shuffles anyone's customizations. [DISPLAY_ORDER] is the left-to-right order on screen.
+ */
+enum class BladeId(val slot: Int, val title: String, val canHide: Boolean = true) {
+    HOME(0, "home", canHide = false),
+    MUSIC(1, "music"),
+    APPS(2, "apps"),
+    QUICK(3, "quick"),
+    CLOCK(4, "clock"),
+    STYLE(5, "style", canHide = false),
+    GAMES(6, "games");
+
+    companion object {
+        val DISPLAY_ORDER = listOf(HOME, MUSIC, GAMES, APPS, QUICK, CLOCK, STYLE)
+    }
+}
+
 /** A named color scheme: two background stops plus one accent per blade. */
 data class HostedWidget(val id: Int, val heightDp: Int)
 
@@ -165,7 +183,52 @@ class LauncherSettings(context: Context) {
 
     fun accentFor(blade: Int): Color {
         val o = accentOverride(blade)
-        return if (o in AccentSwatches.indices) AccentSwatches[o] else palette.blades[blade % palette.blades.size]
+        return if (o in AccentSwatches.indices) AccentSwatches[o] else paletteColorFor(blade)
+    }
+
+    /** Default tab color: palette colors go in on-screen order so neighbours never match. */
+    fun paletteColorFor(blade: Int): Color {
+        val position = BladeId.DISPLAY_ORDER.indexOfFirst { it.slot == blade }.coerceAtLeast(0)
+        return palette.blades[position % palette.blades.size]
+    }
+
+    // --- Which blades are shown ---
+    private var hiddenBladesRaw by stringPref("hidden_blades", "")
+    fun isBladeShown(id: BladeId) = !id.canHide || id.name !in hiddenBladesRaw.split('|')
+    fun setBladeShown(id: BladeId, shown: Boolean) {
+        val set = hiddenBladesRaw.split('|').filter { it.isNotEmpty() }.toSet()
+        hiddenBladesRaw = (if (shown) set - id.name else set + id.name).joinToString("|")
+    }
+    val visibleBlades: List<BladeId> get() = BladeId.DISPLAY_ORDER.filter { isBladeShown(it) }
+
+    // --- Games ---
+    private var gameIncludesRaw by stringPref("game_includes", "")
+    private var gameExcludesRaw by stringPref("game_excludes", "")
+    private var gameZoomRaw by stringPref("game_zoom", "")
+    /** Overall cover size on the Games blade, in percent. */
+    var gameCardScale by intPref("game_card_scale", 100)
+
+    val gameIncludes: Set<String> get() = gameIncludesRaw.split('|').filter { it.isNotEmpty() }.toSet()
+    val gameExcludes: Set<String> get() = gameExcludesRaw.split('|').filter { it.isNotEmpty() }.toSet()
+
+    fun setGameLists(includes: Set<String>, excludes: Set<String>) {
+        gameIncludesRaw = includes.joinToString("|")
+        gameExcludesRaw = excludes.joinToString("|")
+    }
+
+    private val gameZooms: Map<String, Float>
+        get() = gameZoomRaw.split('|').mapNotNull { e ->
+            val i = e.lastIndexOf('=')
+            if (i <= 0) null else e.substring(0, i) to (e.substring(i + 1).toFloatOrNull() ?: return@mapNotNull null)
+        }.toMap()
+
+    /** Per-game zoom for its cover image or icon (1.0 = default). */
+    fun gameZoom(key: String): Float = gameZooms[key] ?: 1f
+
+    fun setGameZoom(key: String, zoom: Float) {
+        val m = gameZooms.toMutableMap()
+        if (zoom == 1f) m.remove(key) else m[key] = zoom
+        gameZoomRaw = m.entries.joinToString("|") { "${it.key}=${"%.2f".format(java.util.Locale.US, it.value)}" }
     }
 
     // Pinned apps on the Home blade, in pin order. Keys are flattened ComponentNames.
@@ -219,6 +282,6 @@ class LauncherSettings(context: Context) {
     }
 
     companion object {
-        const val MAX_BLADES = 6
+        const val MAX_BLADES = 7
     }
 }

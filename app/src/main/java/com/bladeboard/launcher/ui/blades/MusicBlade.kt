@@ -61,6 +61,8 @@ import com.bladeboard.launcher.media.MediaListenerService
 import com.bladeboard.launcher.media.MediaRepository
 import com.bladeboard.launcher.media.NowPlaying
 import com.bladeboard.launcher.ui.BladeHeader
+import com.bladeboard.launcher.ui.LocalWideBlade
+import com.bladeboard.launcher.ui.focusRing
 import com.bladeboard.launcher.ui.MediaIcons
 import com.bladeboard.launcher.widgets.WidgetHostManager
 import kotlinx.coroutines.delay
@@ -117,14 +119,15 @@ private fun PlayerCard(np: NowPlaying, media: MediaRepository, repo: AppReposito
     var dragValue by remember { mutableFloatStateOf(0f) }
     val sourceApp = repo.apps.firstOrNull { it.component.packageName == np.packageName }
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+    val wide = LocalWideBlade.current
+    val artView: @Composable (Modifier) -> Unit = { artSize ->
         Box(
             Modifier
-                .widthIn(max = 300.dp)
-                .fillMaxWidth()
+                .then(artSize)
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(16.dp))
                 .background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.3f))))
+                .focusRing(accent, RoundedCornerShape(16.dp))
                 .clickable { sourceApp?.let(repo::launch) },
             contentAlignment = Alignment.Center,
         ) {
@@ -135,7 +138,9 @@ private fun PlayerCard(np: NowPlaying, media: MediaRepository, repo: AppReposito
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+    }
+    val detailsView: @Composable () -> Unit = {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         Text(np.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val sub = listOf(np.artist, np.album).filter { it.isNotBlank() }.joinToString(" · ")
         if (sub.isNotEmpty()) {
@@ -171,13 +176,27 @@ private fun PlayerCard(np: NowPlaying, media: MediaRepository, repo: AppReposito
         if (sourceApp != null) {
             TextButton(onClick = { repo.launch(sourceApp) }) { Text("Open ${sourceApp.label}", color = accent) }
         }
+        }
+    }
+
+    if (wide) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            artView(Modifier.widthIn(max = 240.dp).weight(0.42f))
+            Box(Modifier.weight(0.58f)) { detailsView() }
+        }
+    } else {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            artView(Modifier.widthIn(max = 300.dp).fillMaxWidth())
+            Spacer(Modifier.height(16.dp))
+            detailsView()
+        }
     }
 }
 
 @Composable
 private fun TransportButton(icon: ImageVector, label: String, size: Dp, bg: Color, onClick: () -> Unit) {
     Box(
-        Modifier.size(size).clip(CircleShape).background(bg).clickable(onClick = onClick),
+        Modifier.size(size).focusRing(Color.White, CircleShape).clip(CircleShape).background(bg).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(size * 0.5f))

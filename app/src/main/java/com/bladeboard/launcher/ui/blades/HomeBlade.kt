@@ -32,6 +32,13 @@ import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.ui.AppTile
 import com.bladeboard.launcher.ui.BladeHeader
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import com.bladeboard.launcher.ui.AutoSizeText
+import com.bladeboard.launcher.ui.LocalWideBlade
+import com.bladeboard.launcher.ui.focusRing
 import com.bladeboard.launcher.ui.UpdateBanner
 import com.bladeboard.launcher.update.UpdateManager
 import com.bladeboard.launcher.update.UpdateState
@@ -53,35 +60,59 @@ fun HomeBlade(repo: AppRepository, settings: LauncherSettings, updates: UpdateMa
 
     val pinned = settings.favorites.mapNotNull { key -> repo.apps.firstOrNull { it.key == key } }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp)) {
-        UpdateBanner(updates, accent, Modifier.padding(bottom = 16.dp))
+    val wide = LocalWideBlade.current
+
+    val clock: @Composable () -> Unit = {
         Column(
-            Modifier.clickable { repo.openIntent(Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
+            Modifier
+                .focusRing(accent)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { repo.openIntent(Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
         ) {
-            Text(now.format(timeFmt), fontSize = 64.sp, fontWeight = FontWeight.Light, letterSpacing = (-1).sp)
+            AutoSizeText(now.format(timeFmt), maxFontSize = if (wide) 88.sp else 64.sp, fontWeight = FontWeight.Light)
             Text(now.format(dateFmt), fontSize = 16.sp, color = accent, fontWeight = FontWeight.Medium)
         }
+    }
 
-        Spacer(Modifier.height(32.dp))
-        BladeHeader("Pinned", accent)
-        Spacer(Modifier.height(8.dp))
+    val pinnedSection: @Composable () -> Unit = {
+        Column {
+            BladeHeader("Pinned", accent)
+            Spacer(Modifier.height(8.dp))
+            if (pinned.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Long-press any app on the Apps blade\nand choose \"Pin to Home\".",
+                        textAlign = TextAlign.Center,
+                        color = Color.White.copy(alpha = 0.6f),
+                    )
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(settings.pinnedColumns + if (wide) 2 else 0),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    items(pinned, key = { it.key }) { app -> AppTile(app, repo, settings, accent, iconSize = settings.pinnedIconSizeDp.dp) }
+                }
+            }
+        }
+    }
 
-        if (pinned.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "Long-press any app on the Apps blade\nand choose \"Pin to Home\".",
-                    textAlign = TextAlign.Center,
-                    color = Color.White.copy(alpha = 0.6f),
-                )
+    if (wide) {
+        // Landscape: clock on the left, pinned apps on the right.
+        Row(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Column(Modifier.weight(0.4f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+                UpdateBanner(updates, accent, Modifier.padding(bottom = 16.dp))
+                clock()
             }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(settings.pinnedColumns),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                items(pinned, key = { it.key }) { app -> AppTile(app, repo, settings, accent, iconSize = settings.pinnedIconSizeDp.dp) }
-            }
+            Box(Modifier.weight(0.6f).fillMaxHeight()) { pinnedSection() }
+        }
+    } else {
+        Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp)) {
+            UpdateBanner(updates, accent, Modifier.padding(bottom = 16.dp))
+            clock()
+            Spacer(Modifier.height(32.dp))
+            pinnedSection()
         }
     }
 }

@@ -42,9 +42,16 @@ import com.bladeboard.launcher.ui.blades.MusicBlade
 import com.bladeboard.launcher.ui.blades.ClockBlade
 import com.bladeboard.launcher.clock.Stopwatch
 import com.bladeboard.launcher.ui.blades.QuickBlade
+import com.bladeboard.launcher.ui.blades.GamesBlade
+import com.bladeboard.launcher.games.GameLibrary
+import com.bladeboard.launcher.data.BladeId
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import com.bladeboard.launcher.ui.blades.StyleBlade
 
-private val BladeTitles = listOf("home", "music", "apps", "quick", "clock", "style")
 
 /**
  * The blade stack. Every blade is the same width; blades at or left of the selected one sit
@@ -58,14 +65,34 @@ fun BladeDashboard(
     widgets: WidgetHostManager,
     updates: UpdateManager,
     stopwatch: Stopwatch,
+    games: GameLibrary,
     settings: LauncherSettings,
     homePresses: Int,
+    controller: Flow<ControllerAction>,
 ) {
+    val blades = settings.visibleBlades
     var selected by rememberSaveable { mutableIntStateOf(0) }
-    val go: (Int) -> Unit = { selected = it.coerceIn(0, BladeTitles.lastIndex) }
+    if (selected > blades.lastIndex) selected = blades.lastIndex
+    val go: (Int) -> Unit = { selected = it.coerceIn(0, settings.visibleBlades.lastIndex) }
 
     // Home button while already on the launcher → back to the Home blade.
     LaunchedEffect(homePresses) { if (homePresses > 0) selected = 0 }
+
+    // LB / RB / Start. After the blade slides over, focus its first item so the D-pad
+    // carries on from there.
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(controller) {
+        controller.collect { action ->
+            when (action) {
+                ControllerAction.PREVIOUS_BLADE -> go(selected - 1)
+                ControllerAction.NEXT_BLADE -> go(selected + 1)
+                ControllerAction.HOME -> selected = 0
+            }
+            focusManager.clearFocus(force = true)
+            delay(420)
+            focusManager.moveFocus(FocusDirection.Next)
+        }
+    }
     // Back never leaves the launcher; it returns to Home.
     BackHandler { selected = 0 }
 
@@ -75,7 +102,7 @@ fun BladeDashboard(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
-            val count = BladeTitles.size
+            val count = blades.size
             val tabW = settings.tabWidthDp.dp
             val fullW = maxWidth
             // Edge curvature scales with screen height so tall phones get a gentle, long arc.
@@ -100,7 +127,9 @@ fun BladeDashboard(
                         ) { _, amount -> dragTotal += amount }
                     }
             ) {
-                BladeTitles.forEachIndexed { i, title ->
+                blades.forEachIndexed { i, blade ->
+                    val title = blade.title
+                    val slot = blade.slot
                     val active = i == selected
                     val targetX = if (i <= selected) tabW * i else fullW - tabW * (count - i)
                     val x by animateDpAsState(
@@ -117,12 +146,12 @@ fun BladeDashboard(
                         },
                         label = "bladeLean$i",
                     )
-                    val accent = settings.accentFor(i)
+                    val accent = settings.accentFor(slot)
 
                     Blade(
                         title = title,
                         accent = accent,
-                        panel = settings.panelFor(i),
+                        panel = settings.panelFor(slot),
                         active = active,
                         onRight = i > selected,
                         classic = settings.classicBlades,
@@ -141,13 +170,16 @@ fun BladeDashboard(
                                 transformOrigin = TransformOrigin(0f, 0.5f)
                             },
                     ) {
-                        when (i) {
-                            0 -> HomeBlade(repo, settings, updates, accent)
-                            1 -> MusicBlade(media, widgets, repo, settings, accent)
-                            2 -> AppsBlade(repo, settings, accent)
-                            3 -> QuickBlade(repo, settings, accent)
-                            4 -> ClockBlade(stopwatch, repo, settings, accent)
-                            else -> StyleBlade(settings, repo, updates, BladeTitles, accent)
+                        CompositionLocalProvider(LocalWideBlade provides (bladeW >= 520.dp)) {
+                            when (blade) {
+                                BladeId.HOME -> HomeBlade(repo, settings, updates, accent)
+                                BladeId.MUSIC -> MusicBlade(media, widgets, repo, settings, accent)
+                                BladeId.GAMES -> GamesBlade(repo, settings, games, accent)
+                                BladeId.APPS -> AppsBlade(repo, settings, accent)
+                                BladeId.QUICK -> QuickBlade(repo, settings, accent)
+                                BladeId.CLOCK -> ClockBlade(stopwatch, repo, settings, accent)
+                                BladeId.STYLE -> StyleBlade(settings, repo, updates, accent)
+                            }
                         }
                     }
                 }

@@ -48,8 +48,11 @@ import com.bladeboard.launcher.data.AppRepository
 import com.bladeboard.launcher.data.BackgroundStyle
 import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.data.Palettes
+import com.bladeboard.launcher.data.BladeId
 import com.bladeboard.launcher.data.TabFinish
 import com.bladeboard.launcher.ui.BladeHeader
+import com.bladeboard.launcher.ui.LocalWideBlade
+import com.bladeboard.launcher.ui.focusRing
 import com.bladeboard.launcher.ui.UpdateBanner
 import com.bladeboard.launcher.update.UpdateManager
 import com.bladeboard.launcher.update.UpdateState
@@ -61,14 +64,13 @@ fun StyleBlade(
     settings: LauncherSettings,
     repo: AppRepository,
     updates: UpdateManager,
-    bladeTitles: List<String>,
     accent: Color,
 ) {
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 20.dp),
+            .padding(horizontal = if (LocalWideBlade.current) 48.dp else 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // --- Theme palettes ---
@@ -79,6 +81,7 @@ fun StyleBlade(
                 Column(
                     Modifier
                         .width(96.dp)
+                        .focusRing(Color.White)
                         .clip(RoundedCornerShape(12.dp))
                         .background(Brush.verticalGradient(listOf(p.bgTop, p.bgBottom)))
                         .border(
@@ -117,12 +120,14 @@ fun StyleBlade(
             "Tab is the outer bar; Panel is the inner menu. \"A\" = automatic (palette for tabs, match tab for panels).",
             fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f),
         )
-        bladeTitles.forEachIndexed { blade, title ->
+        BladeId.DISPLAY_ORDER.forEach { id ->
+            val blade = id.slot
+            val title = id.title
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 SwatchRow(
                     label = "Tab",
-                    autoColor = settings.palette.blades[blade % settings.palette.blades.size],
+                    autoColor = settings.paletteColorFor(blade),
                     selected = settings.accentOverride(blade),
                 ) { settings.setAccentOverride(blade, it) }
                 SwatchRow(
@@ -132,6 +137,22 @@ fun StyleBlade(
                 ) { settings.setPanelOverride(blade, it) }
             }
         }
+
+        // --- Which blades are shown ---
+        BladeHeader("Blades", accent)
+        Text(
+            "Hide blades you don't use to give the open blade more room. Home and Style always stay.",
+            fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f),
+        )
+        BladeId.DISPLAY_ORDER.filter { it.canHide }.forEach { id ->
+            LabeledSwitch(id.title.replaceFirstChar { it.uppercase() }, settings.isBladeShown(id), accent) {
+                settings.setBladeShown(id, it)
+            }
+        }
+
+        // --- Games ---
+        BladeHeader("Games", accent)
+        LabeledSlider("Cover size (%)", settings.gameCardScale, 60..140, accent) { settings.gameCardScale = it }
 
         // --- Blade shape & finish ---
         BladeHeader("Blade shape", accent)
@@ -211,6 +232,7 @@ private fun Swatch(color: Color, selected: Boolean, label: String? = null, onCli
     Box(
         Modifier
             .size(28.dp)
+            .focusRing(Color.White, CircleShape)
             .clip(CircleShape)
             .background(color)
             .border(if (selected) 2.dp else 0.dp, Color.White, CircleShape)

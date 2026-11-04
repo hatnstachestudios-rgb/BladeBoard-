@@ -71,6 +71,12 @@ import com.bladeboard.launcher.data.LauncherSettings
 import com.bladeboard.launcher.ui.AppMenu
 import com.bladeboard.launcher.ui.AppTile
 import com.bladeboard.launcher.ui.BladeHeader
+import com.bladeboard.launcher.ui.LocalWideBlade
+import com.bladeboard.launcher.ui.LocalControllerMode
+import androidx.compose.ui.focus.focusProperties
+import com.bladeboard.launcher.ui.focusRing
+import com.bladeboard.launcher.ui.onOptionsButton
+import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -85,9 +91,9 @@ fun AppsBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
     var focusedApp by remember { mutableStateOf<AppEntry?>(null) }
 
     Column(Modifier.fillMaxSize().padding(top = 20.dp)) {
-        Column(Modifier.padding(horizontal = 16.dp)) {
-            BladeHeader("All apps · ${repo.apps.size}", accent)
-            Spacer(Modifier.height(12.dp))
+        val wide = LocalWideBlade.current
+        val controllerMode = LocalControllerMode.current
+        val searchField: @Composable (Modifier) -> Unit = { fieldModifier ->
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -104,8 +110,20 @@ fun AppsBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
                     cursorColor = accent,
                     unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = fieldModifier.focusProperties { canFocus = !controllerMode },
             )
+        }
+        if (wide) {
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                BladeHeader("All apps · ${repo.apps.size}", accent, Modifier.weight(0.35f))
+                searchField(Modifier.weight(0.65f))
+            }
+        } else {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                BladeHeader("All apps · ${repo.apps.size}", accent)
+                Spacer(Modifier.height(12.dp))
+                searchField(Modifier.fillMaxWidth())
+            }
         }
         Spacer(Modifier.height(12.dp))
 
@@ -113,7 +131,7 @@ fun AppsBlade(repo: AppRepository, settings: LauncherSettings, accent: Color) {
             AppCarousel(filtered, query, repo, settings, accent) { focusedApp = it }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(settings.gridColumns),
+                columns = GridCells.Fixed(settings.gridColumns + if (LocalWideBlade.current) 3 else 0),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -136,7 +154,8 @@ private fun AppCarousel(
     accent: Color,
     onFocusChanged: (AppEntry?) -> Unit,
 ) {
-    val columns = remember(apps) { apps.chunked(2) }
+    var rows by remember { mutableIntStateOf(2) }
+    val columns = remember(apps, rows) { apps.chunked(rows) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var selectedRow by remember { mutableIntStateOf(0) }
@@ -166,9 +185,12 @@ private fun AppCarousel(
                 )
                 return@BoxWithConstraints
             }
-            // Fit two cards plus a reflection vertically; keep box-art proportions.
+            // Two rows when there's height for them, one row on short (landscape) blades.
+            val fitRows = if (maxHeight < 420.dp) 1 else 2
+            if (fitRows != rows) rows = fitRows
+            // Fit the cards plus a reflection vertically; keep box-art proportions.
             val rowGap = 14.dp
-            val cardH = min((maxHeight - rowGap - 24.dp) / 2.3f, 260.dp)
+            val cardH = if (rows == 1) min(maxHeight / 1.35f, 260.dp) else min((maxHeight - rowGap - 24.dp) / 2.3f, 260.dp)
             val cardW = min(cardH * 0.78f, maxWidth * 0.55f)
             val reflectionH = cardH * 0.3f
             val sidePad = (maxWidth - cardW) / 2
@@ -216,9 +238,13 @@ private fun AppCarousel(
                                     if (colIndex == centerColumn) repo.launch(app)
                                     else scope.launch { listState.animateScrollToItem(colIndex) }
                                 },
+                                onFocused = {
+                                    selectedRow = row
+                                    scope.launch { listState.animateScrollToItem(colIndex) }
+                                },
                             )
                         }
-                        if (col.size == 1) Spacer(Modifier.height(cardH))
+                        if (col.size < rows) Spacer(Modifier.height(cardH))
                         Reflection(col.last(), accent, cardH, reflectionH, isFocused = colIndex == centerColumn && focusedRow == col.lastIndex)
                     }
                 }
@@ -240,12 +266,17 @@ private fun CoverCard(
     repo: AppRepository,
     settings: LauncherSettings,
     onClick: () -> Unit,
+    onFocused: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Box {
         CardFace(
             app, accent, focused, height,
-            Modifier.combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
+            Modifier
+                .focusRing(accent, RoundedCornerShape(8.dp))
+                .onFocusChanged { if (it.isFocused) onFocused() }
+                .onOptionsButton { menuOpen = true }
+                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
         )
         AppMenu(app, repo, settings, menuOpen) { menuOpen = false }
     }
