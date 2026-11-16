@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -340,6 +341,7 @@ private fun drawReflection(img: ImageBitmap, scope: androidx.compose.ui.graphics
             srcOffset = IntOffset(x0, y0 + sq - srcH),
             srcSize = IntSize(sq, srcH),
             dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+            filterQuality = FilterQuality.High,
         )
     }
 }

@@ -1,6 +1,9 @@
 package com.hatnstache.bladetunes.ui
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.util.LruCache
 import android.util.Size
 import androidx.compose.foundation.Image
@@ -40,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import com.hatnstache.bladetunes.data.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 // ---------------------------------------------------------------- colors / theme
@@ -93,7 +98,7 @@ fun BladesTheme(content: @Composable () -> Unit) {
 
 /** Small in-memory cache so scrolling lists don't reload art from disk. */
 object ArtCache {
-    private val cache = object : LruCache<Long, Bitmap>(32 * 1024 * 1024) {
+    private val cache = object : LruCache<Long, Bitmap>(96 * 1024 * 1024) {
         override fun sizeOf(key: Long, value: Bitmap) = value.byteCount
     }
     private val missing: MutableSet<Long> = ConcurrentHashMap.newKeySet()
@@ -105,7 +110,11 @@ object ArtCache {
     fun clear() { cache.evictAll(); missing.clear() }
 }
 
-/** Loads the embedded cover for [song]'s album (cached per album). */
+/**
+ * Loads the cover for [song]'s album (cached per album).
+ * big = true: the original embedded artwork at its native resolution (Now Playing).
+ * big = false: a small thumbnail for lists and grids.
+ */
 @Composable
 fun rememberArt(song: Song?, big: Boolean = false): ImageBitmap? {
     if (song == null) return null
@@ -114,9 +123,9 @@ fun rememberArt(song: Song?, big: Boolean = false): ImageBitmap? {
     var bmp by remember(key) { mutableStateOf(ArtCache.get(key)?.asImageBitmap()) }
     LaunchedEffect(key) {
         if (bmp == null && !ArtCache.isMissing(key)) {
-            val px = if (big) 900 else 240
             val loaded = withContext(Dispatchers.IO) {
-                runCatching { context.contentResolver.loadThumbnail(song.uri, Size(px, px), null) }.getOrNull()
+                if (big) loadNativeArt(context, song)
+                else runCatching { context.contentResolver.loadThumbnail(song.uri, Size(240, 240), null) }.getOrNull()
             }
             if (loaded != null) {
                 ArtCache.put(key, loaded)
@@ -129,6 +138,54 @@ fun rememberArt(song: Song?, big: Boolean = false): ImageBitmap? {
     return bmp
 }
 
+/** Largest side we'll decode. Only giant (8K+) covers get scaled; normal art stays untouched. */
+private const val MAX_ART_PX = 4096
+
+private val COVER_NAMES = setOf("cover", "folder", "front", "album", "albumart", "albumartlarge")
+private val COVER_EXTS = setOf("jpg", "jpeg", "png", "webp")
+
+/**
+ * Full-quality artwork: the picture embedded in the file, byte for byte;
+ * if there isn't one, a cover image sitting in the album's folder;
+ * last resort, Android's thumbnail.
+ */
+private fun loadNativeArt(context: Context, song: Song): Bitmap? {
+    val embedded = runCatching {
+        val r = MediaMetadataRetriever()
+        try {
+            r.setDataSource(context, song.uri)
+            r.embeddedPicture
+        } finally {
+            runCatching { r.release() }
+        }
+    }.getOrNull()
+    embedded?.let { bytes -> decodeFull { opts -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) } }
+        ?.let { return it }
+
+    val folderCover = runCatching {
+        File(song.path).parentFile?.listFiles()?.firstOrNull {
+            it.isFile && it.nameWithoutExtension.lowercase() in COVER_NAMES && it.extension.lowercase() in COVER_EXTS
+        }
+    }.getOrNull()
+    folderCover?.let { f -> decodeFull { opts -> BitmapFactory.decodeFile(f.path, opts) } }?.let { return it }
+
+    return runCatching {
+        context.contentResolver.loadThumbnail(song.uri, Size(MAX_ART_PX, MAX_ART_PX), null)
+    }.getOrNull()
+}
+
+/** Decodes at native size (no downsampling unless the image is absurdly large). */
+private fun decodeFull(decode: (BitmapFactory.Options?) -> Bitmap?): Bitmap? = runCatching {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    decode(bounds)
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > MAX_ART_PX) sample *= 2
+    decode(BitmapFactory.Options().apply {
+        inSampleSize = sample
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    })
+}.getOrNull()
+
 @Composable
 fun AlbumArt(song: Song?, modifier: Modifier = Modifier, big: Boolean = false, corner: Dp = 4.dp) {
     val art = rememberArt(song, big)
@@ -139,7 +196,10 @@ fun AlbumArt(song: Song?, modifier: Modifier = Modifier, big: Boolean = false, c
         contentAlignment = Alignment.Center,
     ) {
         if (art != null) {
-            Image(art, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Image(
+                art, contentDescription = null, modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop, filterQuality = FilterQuality.High,
+            )
         } else {
             Icon(
                 Icons.Rounded.MusicNote, contentDescription = null,
