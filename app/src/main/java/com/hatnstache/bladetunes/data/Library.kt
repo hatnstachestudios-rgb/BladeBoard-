@@ -22,10 +22,12 @@ data class Song(
     val disc: Int,
     val year: Int,
     val dateAdded: Long,
+    /** Which album this song is grouped into (see [MusicScanner.groupAlbums]). */
+    val albumKey: String = "",
 )
 
 data class Album(
-    val id: Long,
+    val key: String,
     val title: String,
     val artist: String,
     val year: Int,
@@ -38,7 +40,7 @@ data class Artist(
     val name: String,
     val songs: List<Song>,
 ) {
-    val albumCount: Int get() = songs.map { it.albumId }.distinct().size
+    val albumCount: Int get() = songs.map { it.albumKey }.distinct().size
 }
 
 data class LibraryData(
@@ -108,31 +110,57 @@ object MusicScanner {
             }
         }
 
-        songs.sortBy { it.title.lowercase() }
+        val grouped = groupAlbums(songs).sortedBy { it.title.lowercase() }
 
-        val albums = songs.groupBy { it.albumId }.map { (id, list) ->
+        val albums = grouped.groupBy { it.albumKey }.map { (key, list) ->
             val sorted = list.sortedWith(compareBy({ it.disc }, { it.track }, { it.title.lowercase() }))
-            val first = sorted.first()
             Album(
-                id = id,
-                title = first.album,
-                artist = first.albumArtist.ifBlank { first.artist },
+                key = key,
+                title = sorted.first().album,
+                artist = albumArtistOf(sorted),
                 year = sorted.maxOf { it.year },
                 songs = sorted,
             )
         }.sortedBy { it.title.lowercase() }
 
-        val artists = songs.groupBy { it.albumArtist.ifBlank { it.artist } }.map { (name, list) ->
+        val artists = grouped.groupBy { it.albumArtist.ifBlank { it.artist } }.map { (name, list) ->
             Artist(
                 name = name,
                 songs = list.sortedWith(
-                    compareBy({ it.album.lowercase() }, { it.albumId }, { it.disc }, { it.track })
+                    compareBy({ it.album.lowercase() }, { it.albumKey }, { it.disc }, { it.track })
                 ),
             )
         }.sortedBy { it.name.lowercase() }
 
-        LibraryData(songs, albums, artists, loaded = true)
+        LibraryData(grouped, albums, artists, loaded = true)
     }
+
+    /**
+     * Groups songs into albums the way Musicolet does: by album name, not Android's album id.
+     * Android can split one album into several ids (songs in different folders, or tracks with
+     * different featured artists), which made duplicate albums show up.
+     * Only if songs sharing a name have *different album artists* (e.g. two "Greatest Hits")
+     * are they kept apart; songs with no album artist join the main group.
+     */
+    fun groupAlbums(songs: List<Song>): List<Song> =
+        songs.groupBy { norm(it.album) }.flatMap { (name, list) ->
+            val counts = list.map { norm(it.albumArtist) }.filter { it.isNotEmpty() }
+                .groupingBy { it }.eachCount()
+            if (counts.size <= 1) {
+                list.map { it.copy(albumKey = name) }
+            } else {
+                val main = counts.maxBy { it.value }.key
+                list.map { s -> s.copy(albumKey = name + "|" + norm(s.albumArtist).ifEmpty { main }) }
+            }
+        }
+
+    private fun albumArtistOf(songs: List<Song>): String {
+        songs.map { it.albumArtist }.firstOrNull { it.isNotBlank() }?.let { return it }
+        val artists = songs.map { it.artist }.distinct()
+        return if (artists.size == 1) artists.first() else "Various artists"
+    }
+
+    private fun norm(s: String) = s.trim().lowercase().replace(Regex("\\s+"), " ")
 
     private fun clean(s: String?): String? =
         s?.takeIf { it.isNotBlank() && it != UNKNOWN }

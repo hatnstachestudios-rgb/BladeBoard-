@@ -67,7 +67,7 @@ fun isDefaultHome(context: Context): Boolean {
     return info?.activityInfo?.packageName == context.packageName
 }
 
-private val TAB_WIDTH = 20.dp
+private val TAB_WIDTH = 16.dp
 
 @Composable
 fun BladesApp(vm: AppViewModel, activity: MainActivity) {
@@ -180,7 +180,7 @@ private fun BladeTab(blade: Blade, onClick: () -> Unit) {
             Text(
                 blade.title,
                 color = Color.White,
-                fontSize = 13.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 softWrap = false,

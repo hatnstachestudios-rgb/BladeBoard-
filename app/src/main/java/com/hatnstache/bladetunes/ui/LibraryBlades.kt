@@ -209,12 +209,12 @@ fun SongsBlade(vm: AppViewModel, actions: SongActions) {
 fun AlbumsBlade(vm: AppViewModel, actions: SongActions) {
     val accent = Blade.ALBUMS.color
     val library by vm.library.collectAsStateWithLifecycle()
-    var openId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val open = openId?.let { id -> library.albums.firstOrNull { it.id == id } }
+    var openKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val open = openKey?.let { k -> library.albums.firstOrNull { it.key == k } }
 
     if (open != null) {
-        BackHandler { openId = null }
-        AlbumDetail(open, vm, actions, accent, onBack = { openId = null })
+        BackHandler { openKey = null }
+        AlbumDetail(open, vm, actions, accent, onBack = { openKey = null })
         return
     }
 
@@ -229,12 +229,12 @@ fun AlbumsBlade(vm: AppViewModel, actions: SongActions) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(library.albums, key = { it.id }) { album ->
+            items(library.albums, key = { it.key }) { album ->
                 var menu by remember { mutableStateOf(false) }
                 Box {
                     Column(
                         Modifier.combinedClickable(
-                            onClick = { openId = album.id },
+                            onClick = { openKey = album.key },
                             onLongClick = { menu = true },
                         )
                     ) {
@@ -361,11 +361,11 @@ private fun ArtistDetail(artist: Artist, vm: AppViewModel, actions: SongActions,
             DropdownMenuItem(text = { Text("Edit artist tags…") }, onClick = { actions.onEditTags(songs); close() })
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            var lastAlbum: Long? = null
+            var lastAlbum: String? = null
             songs.forEachIndexed { i, s ->
-                if (s.albumId != lastAlbum) {
-                    lastAlbum = s.albumId
-                    item(key = "album-${s.albumId}") {
+                if (s.albumKey != lastAlbum) {
+                    lastAlbum = s.albumKey
+                    item(key = "album-${s.albumKey}") {
                         Row(
                             Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,

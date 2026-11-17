@@ -83,6 +83,7 @@ import com.hatnstache.bladetunes.playback.PlayerState
 private val IpodBlack = Color(0xFF111111)
 private val IpodGrayText = Color(0xFF3B3B3B)
 private const val ART_TILT = 16f
+private val ART_SIZE = 300.dp
 
 /**
  * Now Playing blade: a classic-iPod style screen stretched to a tall phone,
@@ -95,7 +96,7 @@ fun NowPlayingBlade(vm: AppViewModel) {
     val ratings by vm.ratings.ratings.collectAsStateWithLifecycle()
     val song = state.songId?.let { library.byId[it] }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 10.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 10.dp)) {
         IpodScreen(
             song = song,
             state = state,
@@ -147,27 +148,30 @@ private fun IpodScreen(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 14.dp)
+                    .padding(top = 14.dp, bottom = 14.dp)
             ) {
+                // Art gets the full screen width so it can reach 300×300.
                 ReflectedArt(song, Modifier.weight(1f).fillMaxWidth())
 
-                Spacer(Modifier.height(10.dp))
-                IpodText(song?.title ?: "Not Playing", 22.sp, FontWeight.Bold, IpodBlack)
-                IpodText(song?.artist ?: "Pick a song from any blade", 17.sp, FontWeight.SemiBold, IpodGrayText)
-                IpodText(song?.album ?: "", 17.sp, FontWeight.SemiBold, IpodGrayText)
-                Spacer(Modifier.height(6.dp))
-                StarRating(rating = rating, enabled = song != null, onRate = onRate)
-                Spacer(Modifier.height(4.dp))
-                IpodText(
-                    if (state.count > 0) "${state.index + 1} of ${state.count}" else " ",
-                    16.sp, FontWeight.SemiBold, IpodBlack,
-                )
-                Spacer(Modifier.height(14.dp))
-                IpodProgress(
-                    positionMs = state.positionMs,
-                    durationMs = state.durationMs,
-                    onSeek = onSeek,
-                )
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Spacer(Modifier.height(10.dp))
+                    IpodText(song?.title ?: "Not Playing", 22.sp, FontWeight.Bold, IpodBlack)
+                    IpodText(song?.artist ?: "Pick a song from any blade", 17.sp, FontWeight.SemiBold, IpodGrayText)
+                    IpodText(song?.album ?: "", 17.sp, FontWeight.SemiBold, IpodGrayText)
+                    Spacer(Modifier.height(6.dp))
+                    StarRating(rating = rating, enabled = song != null, onRate = onRate)
+                    Spacer(Modifier.height(4.dp))
+                    IpodText(
+                        if (state.count > 0) "${state.index + 1} of ${state.count}" else " ",
+                        16.sp, FontWeight.SemiBold, IpodBlack,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    IpodProgress(
+                        positionMs = state.positionMs,
+                        durationMs = state.durationMs,
+                        onSeek = onSeek,
+                    )
+                }
             }
         }
     }
@@ -296,7 +300,8 @@ private fun ReflectedArt(song: Song?, modifier: Modifier = Modifier) {
     val art = rememberArt(song, big = true)
     BoxWithConstraints(modifier, contentAlignment = Alignment.TopCenter) {
         val reflectionRatio = 0.22f
-        val side: Dp = min(maxWidth * 0.9f, maxHeight / (1f + reflectionRatio))
+        // 300×300 target; only shrinks if the screen genuinely has less room.
+        val side: Dp = min(ART_SIZE, min(maxWidth, maxHeight / (1f + reflectionRatio)))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier
