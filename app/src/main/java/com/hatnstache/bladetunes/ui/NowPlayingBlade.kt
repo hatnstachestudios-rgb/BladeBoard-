@@ -82,7 +82,6 @@ import com.hatnstache.bladetunes.playback.PlayerState
 
 private val IpodBlack = Color(0xFF111111)
 private val IpodGrayText = Color(0xFF3B3B3B)
-private const val ART_TILT = 16f
 private val ART_SIZE = 300.dp
 
 /**
@@ -294,7 +293,7 @@ fun rememberBatteryLevel(): Int {
     return level
 }
 
-/** Album art tilted in 3D with the fading mirror reflection under it. */
+/** Flat album art with the fading mirror reflection under it. */
 @Composable
 private fun ReflectedArt(song: Song?, modifier: Modifier = Modifier) {
     val art = rememberArt(song, big = true)
@@ -303,22 +302,13 @@ private fun ReflectedArt(song: Song?, modifier: Modifier = Modifier) {
         // 300×300 target; only shrinks if the screen genuinely has less room.
         val side: Dp = min(ART_SIZE, min(maxWidth, maxHeight / (1f + reflectionRatio)))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier
-                    .size(side)
-                    .graphicsLayer {
-                        rotationY = ART_TILT
-                        cameraDistance = 14f * density
-                    }
-            ) {
+            Box(Modifier.size(side)) {
                 AlbumArt(song, Modifier.fillMaxSize(), big = true, corner = 0.dp)
             }
             Canvas(
                 Modifier
                     .size(width = side, height = side * reflectionRatio)
                     .graphicsLayer {
-                        rotationY = ART_TILT
-                        cameraDistance = 14f * density
                         compositingStrategy = CompositingStrategy.Offscreen
                     }
             ) {

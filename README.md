@@ -1,4 +1,4 @@
-# BladeTunes
+# Music Blades
 
 An offline music player that is also an Android launcher, styled after the Xbox 360 "Blades" dashboard.
 Separate from BladeBoard: this branch (`bladetunes`) shares no code or history with `main`.
@@ -27,7 +27,7 @@ Needs **All files access** once (the app asks the first time you edit, or use Sy
 
 ## Building
 
-Every push to this branch builds a debug APK in GitHub Actions. The newest one is in **Releases → "BladeTunes build N"** as `BladeTunes.apk`. Builds are signed with the same key as BladeBoard (repo secret `KEYSTORE_PASSWORD`), so each one installs over the last.
+Every push to this branch builds a debug APK in GitHub Actions. The newest one is in **Releases → "Music Blades build N"** as `MusicBlades.apk`. Builds are signed with the same key as BladeBoard (repo secret `KEYSTORE_PASSWORD`), so each one installs over the last.
 
 Or open the project in Android Studio and run it (Android 11 / API 30 or newer).
 

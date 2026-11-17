@@ -220,10 +220,10 @@ private fun PermissionScreen(onGrant: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("BladeTunes", fontSize = 34.sp, fontWeight = FontWeight.Light, color = BladeColors.Text)
+        Text("Music Blades", fontSize = 34.sp, fontWeight = FontWeight.Light, color = BladeColors.Text)
         Spacer(Modifier.height(12.dp))
         Text(
-            "Allow access to your music so BladeTunes can find the songs on this device. Nothing ever leaves your phone.",
+            "Allow access to your music so Music Blades can find the songs on this device. Nothing ever leaves your phone.",
             color = BladeColors.TextDim, fontSize = 15.sp,
         )
         Spacer(Modifier.height(20.dp))

@@ -1,4 +1,4 @@
-name: Build BladeTunes APK
+name: Build Music Blades APK
 
 on:
   push:
@@ -41,18 +41,18 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BladeTunes-debug-apk
+          name: MusicBlades-debug-apk
           path: app/build/outputs/apk/debug/*.apk
 
-      # Newest build is always at Releases → "BladeTunes latest build" as a plain .apk.
+      # Newest build is always at Releases → "Music Blades latest build" as a plain .apk.
       - name: Publish APK release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk BladeTunes.apk
+          cp app/build/outputs/apk/debug/app-debug.apk MusicBlades.apk
           gh release delete bladetunes-latest --yes --cleanup-tag || true
-          gh release create bladetunes-latest BladeTunes.apk \
+          gh release create bladetunes-latest MusicBlades.apk \
             --target "$GITHUB_SHA" \
             --latest=false \
-            --title "BladeTunes build ${{ github.run_number }}" \
-            --notes "Debug build from commit ${GITHUB_SHA::7}. Download BladeTunes.apk below and open it to install."
+            --title "Music Blades build ${{ github.run_number }}" \
+            --notes "Debug build from commit ${GITHUB_SHA::7}. Download MusicBlades.apk below and open it to install."

@@ -174,8 +174,8 @@ fun TagEditorDialog(songs: List<Song>, vm: AppViewModel, onDismiss: () -> Unit) 
             title = { Text("Allow file access") },
             text = {
                 Text(
-                    "To save tags into your music files, BladeTunes needs \"All files access\". " +
-                        "Turn it on for BladeTunes on the next screen, then come back."
+                    "To save tags into your music files, Music Blades needs \"All files access\". " +
+                        "Turn it on for Music Blades on the next screen, then come back."
                 )
             },
             confirmButton = {
