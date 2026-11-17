@@ -123,10 +123,20 @@ object MusicScanner {
             )
         }.sortedBy { it.title.lowercase() }
 
-        val artists = grouped.groupBy { it.albumArtist.ifBlank { it.artist } }.map { (name, list) ->
+        // A song shows under every artist in a multi-artist tag ("BigXthaPlug; Snoop Dogg").
+        val artistNames = mutableMapOf<String, String>()
+        val artistSongs = mutableMapOf<String, MutableList<Song>>()
+        for (song in grouped) {
+            for (name in splitArtists(song.albumArtist.ifBlank { song.artist })) {
+                val k = norm(name)
+                artistNames.getOrPut(k) { name }
+                artistSongs.getOrPut(k) { mutableListOf() } += song
+            }
+        }
+        val artists = artistSongs.map { (k, list) ->
             Artist(
-                name = name,
-                songs = list.sortedWith(
+                name = artistNames.getValue(k),
+                songs = list.distinctBy { it.id }.sortedWith(
                     compareBy({ it.album.lowercase() }, { it.albumKey }, { it.disc }, { it.track })
                 ),
             )
@@ -136,28 +146,66 @@ object MusicScanner {
     }
 
     /**
-     * Groups songs into albums the way Musicolet does: by album name, not Android's album id.
-     * Android can split one album into several ids (songs in different folders, or tracks with
-     * different featured artists), which made duplicate albums show up.
-     * Only if songs sharing a name have *different album artists* (e.g. two "Greatest Hits")
-     * are they kept apart; songs with no album artist join the main group.
+     * Groups songs into albums by album name, like Musicolet, instead of Android's album id.
+     *
+     * Songs with the same album name stay together when they're in the same folder OR their
+     * album-artist tags share any artist (so "BigXthaPlug; Ro$ama" and "BigXthaPlug; Snoop Dogg"
+     * are one album). Only same-named albums with nothing in common — different folders and
+     * no shared artist, like two different "Greatest Hits" — are kept apart.
      */
     fun groupAlbums(songs: List<Song>): List<Song> =
         songs.groupBy { norm(it.album) }.flatMap { (name, list) ->
-            val counts = list.map { norm(it.albumArtist) }.filter { it.isNotEmpty() }
-                .groupingBy { it }.eachCount()
-            if (counts.size <= 1) {
-                list.map { it.copy(albumKey = name) }
-            } else {
-                val main = counts.maxBy { it.value }.key
-                list.map { s -> s.copy(albumKey = name + "|" + norm(s.albumArtist).ifEmpty { main }) }
+            if (list.size == 1) return@flatMap list.map { it.copy(albumKey = name) }
+
+            // Union-find over the songs in this name group.
+            val parent = IntArray(list.size) { it }
+            fun find(i: Int): Int {
+                var x = i
+                while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x] }
+                return x
             }
+            fun union(a: Int, b: Int) { parent[find(a)] = find(b) }
+
+            val byFolder = mutableMapOf<String, Int>()
+            val byArtist = mutableMapOf<String, Int>()
+            list.forEachIndexed { i, s ->
+                val folder = s.path.substringBeforeLast('/', "").lowercase()
+                if (folder.isNotEmpty()) byFolder[folder]?.let { union(i, it) } ?: run { byFolder[folder] = i }
+                for (artist in splitArtists(s.albumArtist).map(::norm)) {
+                    byArtist[artist]?.let { union(i, it) } ?: run { byArtist[artist] = i }
+                }
+            }
+
+            // Songs with no album artist that ended up alone join the biggest group.
+            val clusters = list.indices.groupBy { find(it) }
+            val biggest = clusters.maxBy { it.value.size }.key
+            for ((root, members) in clusters) {
+                if (root != biggest && members.all { list[it].albumArtist.isBlank() }) union(root, biggest)
+            }
+
+            // Biggest group keeps the plain key; any genuinely separate album gets a suffix.
+            val roots = list.indices.groupBy { find(it) }.entries.sortedByDescending { it.value.size }
+            val keyOf = roots.mapIndexed { n, e -> e.key to if (n == 0) name else "$name#$n" }.toMap()
+            list.mapIndexed { i, s -> s.copy(albumKey = keyOf.getValue(find(i))) }
         }
 
+    /** Splits multi-artist tags like "BigXthaPlug; Ro$ama" (only on ';' so "AC/DC" survives). */
+    fun splitArtists(tag: String): List<String> =
+        tag.split(';', '\u0000').map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** The artist most of the album's songs share, or "Various artists". */
     private fun albumArtistOf(songs: List<Song>): String {
-        songs.map { it.albumArtist }.firstOrNull { it.isNotBlank() }?.let { return it }
-        val artists = songs.map { it.artist }.distinct()
-        return if (artists.size == 1) artists.first() else "Various artists"
+        val names = mutableMapOf<String, String>()
+        val counts = mutableMapOf<String, Int>()
+        for (s in songs) {
+            for (a in splitArtists(s.albumArtist.ifBlank { s.artist })) {
+                val k = norm(a)
+                names.getOrPut(k) { a }
+                counts[k] = (counts[k] ?: 0) + 1
+            }
+        }
+        val top = counts.maxByOrNull { it.value } ?: return "Unknown artist"
+        return if (counts.size == 1 || top.value * 2 >= songs.size) names.getValue(top.key) else "Various artists"
     }
 
     private fun norm(s: String) = s.trim().lowercase().replace(Regex("\\s+"), " ")
