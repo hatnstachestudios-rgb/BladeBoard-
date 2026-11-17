@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.hatnstache.bladetunes.data.ArtistImages
 import com.hatnstache.bladetunes.data.LibraryData
 import com.hatnstache.bladetunes.data.MusicScanner
 import com.hatnstache.bladetunes.data.PlaylistNode
@@ -32,6 +33,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val player = PlayerConnection(app)
     val playlists = PlaylistStore(app)
     val ratings = RatingStore(app)
+    val artistImages = ArtistImages(app)
 
     fun refresh() {
         viewModelScope.launch {
@@ -60,6 +62,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (TagEditor.hasFileAccess() && song.path.isNotEmpty()) {
             viewModelScope.launch { TagEditor.writeRating(getApplication(), song.path, stars) }
         }
+    }
+
+    // ---- artist photos ----
+
+    fun setArtistPhoto(artistName: String, uri: Uri) {
+        viewModelScope.launch {
+            toast(if (artistImages.set(artistName, uri)) "Photo set for $artistName" else "Couldn't use that image")
+        }
+    }
+
+    fun removeArtistPhoto(artistName: String) {
+        artistImages.remove(artistName)
+        toast("Photo removed")
     }
 
     // ---- tag editing ----

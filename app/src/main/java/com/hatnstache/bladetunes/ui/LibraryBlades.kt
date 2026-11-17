@@ -1,6 +1,9 @@
 package com.hatnstache.bladetunes.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -292,6 +295,7 @@ private fun AlbumDetail(album: Album, vm: AppViewModel, actions: SongActions, ac
 
 // ---------------------------------------------------------------- artists blade
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ArtistsBlade(vm: AppViewModel, actions: SongActions) {
     val accent = Blade.ARTISTS.color
@@ -300,9 +304,21 @@ fun ArtistsBlade(vm: AppViewModel, actions: SongActions) {
     var query by rememberSaveable { mutableStateOf("") }
     val open = openName?.let { n -> library.artists.firstOrNull { it.name == n } }
 
+    // Photo picker (no permission needed). Remembers which artist it's for.
+    var photoFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val name = photoFor
+        if (uri != null && name != null) vm.setArtistPhoto(name, uri)
+        photoFor = null
+    }
+    val pickPhoto: (String) -> Unit = { name ->
+        photoFor = name
+        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
     if (open != null) {
         BackHandler { openName = null }
-        ArtistDetail(open, vm, actions, accent, onBack = { openName = null })
+        ArtistDetail(open, vm, actions, accent, onBack = { openName = null }, onPickPhoto = pickPhoto)
         return
     }
 
@@ -315,29 +331,38 @@ fun ArtistsBlade(vm: AppViewModel, actions: SongActions) {
         if (!library.loaded) { CenterMessage("Reading your music…", loading = true); return@Column }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
             items(artists, key = { it.name }) { artist ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { openName = artist.name }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        Modifier.size(46.dp).clip(CircleShape).background(accent.copy(alpha = 0.3f)),
-                        contentAlignment = Alignment.Center,
+                var menu by remember { mutableStateOf(false) }
+                val hasPhoto = rememberHasArtistPhoto(vm, artist.name)
+                Box {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = { openName = artist.name },
+                                onLongClick = { menu = true },
+                            )
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            artist.name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "#",
-                            fontSize = 20.sp, fontWeight = FontWeight.Bold, color = BladeColors.Text,
-                        )
+                        ArtistPhoto(vm, artist, Modifier.size(54.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(artist.name, fontSize = 16.sp, color = BladeColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${plural(artist.albumCount, "album")} • ${plural(artist.songs.size, "song")}",
+                                fontSize = 13.sp, color = BladeColors.TextDim,
+                            )
+                        }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(artist.name, fontSize = 16.sp, color = BladeColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            "${plural(artist.albumCount, "album")} • ${plural(artist.songs.size, "song")}",
-                            fontSize = 13.sp, color = BladeColors.TextDim,
-                        )
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("Play") }, onClick = { vm.play(artist.songs, 0); menu = false })
+                        DropdownMenuItem(text = { Text("Shuffle") }, onClick = { vm.shuffle(artist.songs); menu = false })
+                        DropdownMenuItem(text = { Text(if (hasPhoto) "Change artist photo…" else "Set artist photo…") }, onClick = {
+                            pickPhoto(artist.name); menu = false
+                        })
+                        if (hasPhoto) DropdownMenuItem(text = { Text("Remove artist photo") }, onClick = {
+                            vm.removeArtistPhoto(artist.name); menu = false
+                        })
                     }
                 }
             }
@@ -346,16 +371,33 @@ fun ArtistsBlade(vm: AppViewModel, actions: SongActions) {
 }
 
 @Composable
-private fun ArtistDetail(artist: Artist, vm: AppViewModel, actions: SongActions, accent: Color, onBack: () -> Unit) {
+private fun ArtistDetail(
+    artist: Artist,
+    vm: AppViewModel,
+    actions: SongActions,
+    accent: Color,
+    onBack: () -> Unit,
+    onPickPhoto: (String) -> Unit,
+) {
     val state by vm.player.state.collectAsStateWithLifecycle()
     val songs = artist.songs
+    val hasPhoto = rememberHasArtistPhoto(vm, artist.name)
     Column(Modifier.fillMaxSize()) {
         DetailTitle(
             artist.name,
             "${plural(artist.albumCount, "album")} • ${plural(songs.size, "song")} • ${totalTime(songs)}",
             onBack,
-        )
+        ) {
+            // Tap the photo to change it.
+            ArtistPhoto(vm, artist, Modifier.size(84.dp).clickable { onPickPhoto(artist.name) })
+        }
         GroupButtons(accent, { vm.play(songs, 0) }, { vm.shuffle(songs) }) { close ->
+            DropdownMenuItem(text = { Text(if (hasPhoto) "Change artist photo…" else "Set artist photo…") }, onClick = {
+                onPickPhoto(artist.name); close()
+            })
+            if (hasPhoto) DropdownMenuItem(text = { Text("Remove artist photo") }, onClick = {
+                vm.removeArtistPhoto(artist.name); close()
+            })
             DropdownMenuItem(text = { Text("Add to queue") }, onClick = { vm.player.addToQueue(songs); vm.toast("Added to queue"); close() })
             DropdownMenuItem(text = { Text("Add to playlist…") }, onClick = { actions.onAddToPlaylist(songs); close() })
             DropdownMenuItem(text = { Text("Edit artist tags…") }, onClick = { actions.onEditTags(songs); close() })
