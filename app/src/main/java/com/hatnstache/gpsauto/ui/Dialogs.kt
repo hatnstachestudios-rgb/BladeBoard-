@@ -27,6 +27,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -47,10 +50,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hatnstache.gpsauto.data.BlipColors
 import com.hatnstache.gpsauto.data.BlipIcon
 import com.hatnstache.gpsauto.data.Place
 import com.hatnstache.gpsauto.data.PlaceStore
+import com.hatnstache.gpsauto.data.Settings
+import com.hatnstache.gpsauto.data.ThemeMode
 import com.hatnstache.gpsauto.data.defaultColorFor
 import com.hatnstache.gpsauto.nav.Geo
 import com.hatnstache.gpsauto.nav.PlaceSearch
@@ -59,7 +65,8 @@ import com.hatnstache.gpsauto.nav.Units
 import kotlinx.coroutines.delay
 import org.maplibre.android.geometry.LatLng
 
-data class NewPlace(val name: String, val lat: Double, val lon: Double)
+/** [fromPin]: opened by long-pressing the map, so it can also just set a quick waypoint. */
+data class NewPlace(val name: String, val lat: Double, val lon: Double, val fromPin: Boolean = false)
 
 @Composable
 fun SearchSheet(
@@ -180,7 +187,7 @@ private fun ResultRow(
 }
 
 @Composable
-fun AddPlaceDialog(np: NewPlace, onDismiss: () -> Unit) {
+fun AddPlaceDialog(np: NewPlace, onDismiss: () -> Unit, onWaypoint: () -> Unit = {}) {
     var name by remember { mutableStateOf(np.name) }
     var icon by remember { mutableStateOf(BlipIcon.STAR) }
     var color by remember { mutableStateOf(defaultColorFor(BlipIcon.STAR)) }
@@ -188,7 +195,7 @@ fun AddPlaceDialog(np: NewPlace, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Save this place") },
+        title = { Text(if (np.fromPin) "Dropped pin" else "Save this place") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true)
@@ -229,8 +236,56 @@ fun AddPlaceDialog(np: NewPlace, onDismiss: () -> Unit) {
                 onDismiss()
             }) { Text("Save", color = Pink) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                if (np.fromPin) TextButton(onClick = onWaypoint) { Text("Set waypoint", color = Color(0xFF3CC8F0)) }
+            }
+        },
     )
+}
+
+@Composable
+fun SettingsDialog(onDismiss: () -> Unit) {
+    val theme by Settings.theme.collectAsStateWithLifecycle()
+    val labels by Settings.streetLabels.collectAsStateWithLifecycle()
+    val dynamic by Settings.dynamicOverlay.collectAsStateWithLifecycle()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Map look", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+                ThemeMode.entries.forEach { t ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { Settings.setTheme(t) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = theme == t, onClick = { Settings.setTheme(t) })
+                        Text(t.label)
+                    }
+                }
+                SettingSwitch("Street names on the full map", labels) { Settings.setStreetLabels(it) }
+                SettingSwitch("Floating minimap fades when parked", dynamic) { Settings.setDynamicOverlay(it) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = Pink) } },
+    )
+}
+
+@Composable
+private fun SettingSwitch(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f))
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = Pink),
+        )
+    }
 }
 
 @Composable

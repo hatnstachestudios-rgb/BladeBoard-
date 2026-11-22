@@ -137,6 +137,12 @@ class CarMapRenderer(private val carContext: CarContext, private val lifecycle: 
             NavigationEngine.route.collect { r -> if (r != null) g.recenter() }
         }
         jobs += scope.launch { PlaceStore.places.collect { bv.places = it } }
+        g.onThemeApplied = { night ->
+            root?.setBackgroundColor(if (night) 0xFF101113.toInt() else 0xFF24272B.toInt())
+            ro.setTextColor(if (night) Color.WHITE else 0xFF1C1D20.toInt())
+            ro.setShadowLayer(4f, 0f, 0f, if (night) 0xCC000000.toInt() else 0xCCF4F2ED.toInt())
+        }
+        jobs += g.bindStyle(scope)
         jobs += scope.launch { NavigationEngine.destination.collect { bv.destination = it?.point } }
     }
 

@@ -27,7 +27,10 @@ import com.hatnstache.gpsauto.map.ROUTE_PINK
 import com.hatnstache.gpsauto.nav.Instructions
 import com.hatnstache.gpsauto.nav.NavigationEngine
 import com.hatnstache.gpsauto.nav.Units
+import android.os.SystemClock
+import com.hatnstache.gpsauto.data.Settings
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapLibreMapOptions
@@ -49,15 +52,16 @@ class MinimapOverlay(private val service: LifecycleService) {
     private val turnText = TextView(ctx)
     private val turnChip = LinearLayout(ctx)
     private val root = FrameLayout(ctx)
+    private val container = LinearLayout(ctx)
     private val params = WindowManager.LayoutParams(
-        dp(230), dp(150),
+        dp(230), dp(150 + 46),
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT,
     ).apply {
         gravity = Gravity.TOP or Gravity.START
         x = dp(12)
-        y = service.resources.displayMetrics.heightPixels - dp(150) - dp(120)
+        y = service.resources.displayMetrics.heightPixels - dp(196) - dp(120)
     }
     private val jobs = mutableListOf<Job>()
 
@@ -88,24 +92,6 @@ class MinimapOverlay(private val service: LifecycleService) {
             leftMargin = dp(12); topMargin = dp(8)
         })
 
-        turnChip.orientation = LinearLayout.HORIZONTAL
-        turnChip.gravity = Gravity.CENTER_VERTICAL
-        turnChip.setPadding(dp(6), dp(3), dp(9), dp(3))
-        turnChip.background = GradientDrawable().apply {
-            cornerRadius = dp(12).toFloat()
-            setColor(0xE61B1C1F.toInt())
-        }
-        turnIcon.setColorFilter(ROUTE_PINK)
-        turnChip.addView(turnIcon, LinearLayout.LayoutParams(dp(18), dp(18)))
-        turnText.setTextColor(Color.WHITE)
-        turnText.textSize = 12f
-        turnText.setPadding(dp(4), 0, 0, 0)
-        turnChip.addView(turnText)
-        root.addView(turnChip, FrameLayout.LayoutParams(-2, -2).apply {
-            gravity = Gravity.TOP or Gravity.END
-            rightMargin = dp(8); topMargin = dp(8)
-        })
-
         // Transparent layer on top: the minimap itself doesn't pan, the whole window drags.
         val shield = View(ctx)
         root.addView(shield, FrameLayout.LayoutParams(-1, -1))
@@ -122,7 +108,7 @@ class MinimapOverlay(private val service: LifecycleService) {
                         dragging = true
                         params.x = startX + dx.toInt()
                         params.y = startY + dy.toInt()
-                        runCatching { wm.updateViewLayout(root, params) }
+                        runCatching { wm.updateViewLayout(container, params) }
                     }
                 }
                 MotionEvent.ACTION_UP -> if (!dragging) openApp()
@@ -130,7 +116,27 @@ class MinimapOverlay(private val service: LifecycleService) {
             true
         }
 
-        wm.addView(root, params)
+        // GTA next-turn box above the minimap: "Turn Left  46 ft" + pink arrow.
+        turnChip.orientation = LinearLayout.HORIZONTAL
+        turnChip.gravity = Gravity.CENTER_VERTICAL
+        turnChip.setPadding(dp(11), dp(6), dp(8), dp(6))
+        turnChip.background = GradientDrawable().apply {
+            cornerRadius = dp(10).toFloat()
+            setColor(0xE6141518.toInt())
+        }
+        turnText.setTextColor(Color.WHITE)
+        turnText.textSize = 13f
+        turnChip.addView(turnText)
+        turnIcon.setColorFilter(ROUTE_PINK)
+        turnChip.addView(turnIcon, LinearLayout.LayoutParams(dp(20), dp(20)).apply { leftMargin = dp(8) })
+        turnChip.visibility = View.INVISIBLE
+
+        container.orientation = LinearLayout.VERTICAL
+        container.addView(turnChip, LinearLayout.LayoutParams(-2, dp(34)).apply { bottomMargin = dp(6) })
+        container.addView(root, LinearLayout.LayoutParams(-1, dp(150)))
+        mapView.alpha = 0.95f
+
+        wm.addView(container, params)
         mapView.onStart()
         mapView.onResume()
 
@@ -145,18 +151,38 @@ class MinimapOverlay(private val service: LifecycleService) {
                 if (p != null && NavigationEngine.isNavigating) {
                     distance.text = Units.distancePrecise(p.remaining)
                     val step = p.nextStep
-                    if (step != null && !p.arrived) {
+                    if (step != null && !p.arrived && p.distanceToNext < 480) {
                         turnChip.visibility = View.VISIBLE
                         turnIcon.setImageResource(Instructions.iconRes(step))
-                        turnText.text = Units.distance(p.distanceToNext)
-                    } else turnChip.visibility = View.GONE
+                        turnText.text = "${Instructions.shortLabel(step)}  ${Units.distance(p.distanceToNext)}"
+                    } else turnChip.visibility = View.INVISIBLE
                 } else {
                     distance.text = ""
-                    turnChip.visibility = View.GONE
+                    turnChip.visibility = View.INVISIBLE
                 }
             }
         }
         jobs += service.lifecycleScope.launch { PlaceStore.places.collect { blips.places = it } }
+        gta.onThemeApplied = { night ->
+            root.setBackgroundColor(if (night) 0xFF23262B.toInt() else 0xFFD6D3CB.toInt())
+            distance.setTextColor(if (night) Color.WHITE else 0xFF1C1D20.toInt())
+            distance.setShadowLayer(4f, 0f, 0f, if (night) 0xCC000000.toInt() else 0xCCF4F2ED.toInt())
+        }
+        jobs += gta.bindStyle(service.lifecycleScope)
+        // Dynamic mode: fade out when parked with no route, back in when you drive or start a route.
+        jobs += service.lifecycleScope.launch {
+            var lastActive = SystemClock.elapsedRealtime()
+            while (true) {
+                val active = !Settings.dynamicOverlay.value ||
+                    NavigationEngine.destination.value != null ||
+                    (NavigationEngine.location.value?.speed ?: 0f) > 2f
+                val now = SystemClock.elapsedRealtime()
+                if (active) lastActive = now
+                val target = if (now - lastActive > 15_000) 0.15f else 1f
+                if (container.alpha != target) container.animate().alpha(target).setDuration(600).start()
+                delay(1000)
+            }
+        }
         jobs += service.lifecycleScope.launch {
             NavigationEngine.destination.collect { blips.destination = it?.point }
         }
@@ -176,7 +202,7 @@ class MinimapOverlay(private val service: LifecycleService) {
         runCatching {
             mapView.onPause()
             mapView.onStop()
-            wm.removeView(root)
+            wm.removeView(container)
             mapView.onDestroy()
         }
     }

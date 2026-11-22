@@ -13,7 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
 
-data class Destination(val name: String, val point: LatLng)
+/** [waypoint]: a quick pin dropped on the map. Drawn in cyan like the game's custom waypoints. */
+data class Destination(val name: String, val point: LatLng, val waypoint: Boolean = false)
 
 data class NavProgress(
     val nextStep: RouteStep?,
@@ -73,8 +74,8 @@ object NavigationEngine {
         voice = VoiceGuide(app)
     }
 
-    fun navigateTo(name: String, point: LatLng) {
-        _destination.value = Destination(name, point)
+    fun navigateTo(name: String, point: LatLng, waypoint: Boolean = false) {
+        _destination.value = Destination(name, point, waypoint)
         _error.value = null
         arrivedAnnounced = false
         NavService.startNavigation(app)

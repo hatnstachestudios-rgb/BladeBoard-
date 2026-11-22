@@ -7,6 +7,7 @@ import android.location.Location
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import com.hatnstache.gpsauto.data.Settings
 import com.hatnstache.gpsauto.nav.Geo
 import com.hatnstache.gpsauto.nav.NavigationEngine
 import com.hatnstache.gpsauto.nav.Route
@@ -27,6 +28,9 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
@@ -64,6 +68,10 @@ class GtaMap(
     /** How far down the screen the player sits in follow mode (0 = center, 1 = bottom edge). */
     var followBias = 0.55f
 
+    private var style: Style? = null
+    private var night = false
+    private var labels = true
+    private var routeColor = ROUTE_PINK
     private var routeSource: GeoJsonSource? = null
     private var meSource: GeoJsonSource? = null
     private var styleReady = false
@@ -114,7 +122,7 @@ class GtaMap(
         val route = GeoJsonSource("route")
         style.addSource(route)
         routeSource = route
-        val pink = String.format("#%06X", 0xFFFFFF and ROUTE_PINK)
+        val pink = hex(routeColor)
         val glow = LineLayer("route-glow", "route").withProperties(
             PropertyFactory.lineColor(pink),
             PropertyFactory.lineWidth(if (compact) 12f else 20f),
@@ -153,7 +161,11 @@ class GtaMap(
                 PropertyFactory.iconIgnorePlacement(true),
             )
         )
+        this.style = style
         styleReady = true
+        applyTheme()
+        applyLabels()
+        applyRouteColor()
         pendingRoute?.let { drawRouteLine(it) }
         NavigationEngine.location.value?.let { onLocation(it, NavigationEngine.heading.value, animate = false) }
     }
@@ -297,6 +309,80 @@ class GtaMap(
         val flat = CameraPosition.Builder(cam).tilt(0.0).bearing(0.0).build()
         m.animateCamera(CameraUpdateFactory.newCameraPosition(flat), 800)
         if (NavigationEngine.isNavigating) handler.postDelayed(autoRecenter, 12_000)
+    }
+
+    /** Follow the shared theme, label and waypoint-color state for as long as [scope] lives. */
+    fun bindStyle(scope: CoroutineScope): List<Job> = listOf(
+        scope.launch { MapTheme.night.collect { night = it; applyTheme() } },
+        scope.launch { Settings.streetLabels.collect { labels = it; applyLabels() } },
+        scope.launch {
+            NavigationEngine.destination.collect { d ->
+                routeColor = if (d?.waypoint == true) WAYPOINT_CYAN else ROUTE_PINK
+                blips?.destinationColor = routeColor
+                applyRouteColor()
+            }
+        },
+    )
+
+    private fun hex(c: Int) = String.format("#%06X", 0xFFFFFF and c)
+
+    private fun applyRouteColor() {
+        val s = style ?: return
+        val c = hex(routeColor)
+        s.getLayer("route-glow")?.setProperties(PropertyFactory.lineColor(c))
+        s.getLayer("route-core")?.setProperties(PropertyFactory.lineColor(c))
+    }
+
+    private fun applyLabels() {
+        val s = style ?: return
+        // The game's minimap has no text on it; the full map can show street names.
+        val v = if (labels && !compact) Property.VISIBLE else Property.NONE
+        s.getLayer("road-label")?.setProperties(PropertyFactory.visibility(v))
+        s.getLayer("place-label")?.setProperties(PropertyFactory.visibility(v))
+    }
+
+    /** Warm light-gray by day, slate dark by night. */
+    private fun applyTheme() {
+        val s = style ?: return
+        val p = if (night) NIGHT else DAY
+        s.getLayer("background")?.setProperties(PropertyFactory.backgroundColor(p.ground))
+        s.getLayer("landcover")?.setProperties(PropertyFactory.fillColor(p.green))
+        s.getLayer("park")?.setProperties(PropertyFactory.fillColor(p.park))
+        s.getLayer("landuse")?.setProperties(PropertyFactory.fillColor(p.park))
+        s.getLayer("water")?.setProperties(PropertyFactory.fillColor(p.water))
+        s.getLayer("waterway")?.setProperties(PropertyFactory.lineColor(p.water))
+        s.getLayer("aeroway")?.setProperties(PropertyFactory.fillColor(p.aeroway))
+        s.getLayer("road-minor")?.setProperties(PropertyFactory.lineColor(p.minor))
+        s.getLayer("road-casing")?.setProperties(PropertyFactory.lineColor(p.casing))
+        s.getLayer("road-major")?.setProperties(PropertyFactory.lineColor(p.major))
+        s.getLayer("rail")?.setProperties(PropertyFactory.lineColor(p.rail))
+        s.getLayer("building-3d")?.setProperties(PropertyFactory.fillExtrusionColor(p.building))
+        s.getLayer("poi-entrance")?.setProperties(PropertyFactory.circleStrokeColor(p.dotRing))
+        s.getLayer("road-label")?.setProperties(PropertyFactory.textColor(p.label), PropertyFactory.textHaloColor(p.halo))
+        s.getLayer("place-label")?.setProperties(PropertyFactory.textColor(p.label), PropertyFactory.textHaloColor(p.ground))
+        onThemeApplied?.invoke(night)
+    }
+
+    /** Lets owners recolor their frame/background to match. */
+    var onThemeApplied: ((Boolean) -> Unit)? = null
+
+    private class Palette(
+        val ground: String, val green: String, val park: String, val water: String, val aeroway: String,
+        val minor: String, val casing: String, val major: String, val rail: String, val building: String,
+        val dotRing: String, val label: String, val halo: String,
+    )
+
+    private companion object {
+        private val DAY = Palette(
+            ground = "#d6d3cb", green = "#ccd1c1", park = "#c4cbb9", water = "#a7b8c0", aeroway = "#cfccc4",
+            minor = "#eeece6", casing = "#c9c5bc", major = "#f4f2ed", rail = "#bdb8ae", building = "#e3e0d9",
+            dotRing = "#8a857b", label = "#7a766e", halo = "#f4f2ed",
+        )
+        private val NIGHT = Palette(
+            ground = "#23262b", green = "#262b28", park = "#243026", water = "#17212a", aeroway = "#2a2d31",
+            minor = "#383c43", casing = "#1a1c20", major = "#4b5059", rail = "#3a3d42", building = "#343840",
+            dotRing = "#111214", label = "#9aa0a8", halo = "#23262b",
+        )
     }
 
     fun release() {

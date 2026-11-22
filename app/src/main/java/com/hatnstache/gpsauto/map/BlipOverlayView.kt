@@ -32,6 +32,8 @@ class BlipOverlayView(context: Context) : View(context) {
         set(value) { field = value; invalidate() }
     var destination: LatLng? = null
         set(value) { field = value; invalidate() }
+    var destinationColor: Int = ROUTE_PINK
+        set(value) { field = value; invalidate() }
 
     /** Area the map is actually visible in (Android Auto covers some of the screen). */
     var visibleInsets = Rect()
@@ -109,7 +111,7 @@ class BlipOverlayView(context: Context) : View(context) {
         destination?.let { d ->
             val (pt, inside) = place(d)
             val pr = r * if (inside) 0.95f else 0.8f
-            painter.draw(canvas, pt.x, pt.y, pr, if (inside) R.drawable.blip_flag else null, ROUTE_PINK)
+            painter.draw(canvas, pt.x, pt.y, pr, if (inside) R.drawable.blip_flag else null, destinationColor)
         }
 
         // North marker rides the frame edge in the direction of north.

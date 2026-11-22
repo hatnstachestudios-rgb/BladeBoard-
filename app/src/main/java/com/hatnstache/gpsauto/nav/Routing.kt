@@ -150,6 +150,28 @@ object Instructions {
         else -> text(s)
     }
 
+    /** Two-word label for the GTA-style next-turn box: "Turn Left", "Keep Right"… */
+    fun shortLabel(s: RouteStep): String {
+        val m = s.modifier ?: ""
+        val side = if (m.contains("left")) "Left" else "Right"
+        return when (s.type) {
+            "arrive" -> "Arrive"
+            "roundabout", "rotary", "roundabout turn" -> "Roundabout"
+            "exit roundabout", "exit rotary" -> "Exit"
+            "merge" -> "Merge"
+            "on ramp" -> "Take Ramp"
+            "off ramp" -> "Take Exit"
+            "fork" -> "Keep $side"
+            else -> when {
+                m == "uturn" -> "U-Turn"
+                m == "straight" || m.isBlank() -> "Continue"
+                m.startsWith("slight") -> "Bear $side"
+                m.startsWith("sharp") -> "Sharp $side"
+                else -> "Turn $side"
+            }
+        }
+    }
+
     fun iconRes(s: RouteStep): Int {
         val m = s.modifier ?: ""
         return when (s.type) {

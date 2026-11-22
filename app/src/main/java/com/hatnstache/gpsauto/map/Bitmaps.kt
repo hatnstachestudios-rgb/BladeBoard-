@@ -9,6 +9,8 @@ import android.graphics.Path
 import androidx.core.content.ContextCompat
 
 const val ROUTE_PINK = 0xFFFF4FA8.toInt()
+/** Custom (dropped-pin) waypoints, like the game's cyan player waypoints. */
+const val WAYPOINT_CYAN = 0xFF3CC8F0.toInt()
 
 object Bitmaps {
     /** The player marker: dark disc, white ring, white arrowhead pointing up (north = travel). */

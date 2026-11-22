@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timeline
@@ -83,6 +84,7 @@ import com.hatnstache.gpsauto.data.Place
 import com.hatnstache.gpsauto.data.PlaceStore
 import com.hatnstache.gpsauto.map.BlipOverlayView
 import com.hatnstache.gpsauto.map.GtaMap
+import com.hatnstache.gpsauto.map.MapTheme
 import com.hatnstache.gpsauto.media.MediaRepository
 import com.hatnstache.gpsauto.nav.Instructions
 import com.hatnstache.gpsauto.nav.NavProgress
@@ -147,13 +149,15 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
     var previewFraction by remember { mutableFloatStateOf(0f) }
     var addPlaceAt by remember { mutableStateOf<NewPlace?>(null) }
     var selectedPlace by remember { mutableStateOf<Place?>(null) }
+    var settingsOpen by remember { mutableStateOf(false) }
+    val night by MapTheme.night.collectAsStateWithLifecycle()
     val navigating = destination != null
 
     // MapView lifecycle follows the screen.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         phoneMap.gta.onModeChanged = { mode = it }
-        phoneMap.onLongPress = { ll -> addPlaceAt = NewPlace("", ll.latitude, ll.longitude) }
+        phoneMap.onLongPress = { ll -> addPlaceAt = NewPlace("", ll.latitude, ll.longitude, fromPin = true) }
         phoneMap.onBlipTap = { selectedPlace = it }
         val obs = LifecycleEventObserver { _, e ->
             when (e) {
@@ -172,6 +176,7 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
         }
     }
 
+    LaunchedEffect(phoneMap) { phoneMap.gta.bindStyle(this) }
     LaunchedEffect(location, heading) { location?.let { phoneMap.gta.onLocation(it, heading) } }
     LaunchedEffect(location != null) { if (location != null) phoneMap.gta.recenter() }
     LaunchedEffect(route, progress) { phoneMap.gta.showRoute(route, progress?.along, progress?.snapped) }
@@ -194,7 +199,7 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    Box(Modifier.fillMaxSize().background(Ground)) {
+    Box(Modifier.fillMaxSize().background(if (night) Color(0xFF0D0E10) else Ground)) {
         // ---- Map: full screen, or a rounded GTA minimap in the corner ----
         val frame = RoundedCornerShape(28.dp)
         val mapModifier = if (!minimap) Modifier.fillMaxSize() else Modifier
@@ -224,6 +229,15 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
             }
         }
 
+        // GTA-style next-turn box sitting right on top of the minimap frame.
+        val pm = progress
+        if (minimap && navigating && pm != null && pm.nextStep != null && !pm.arrived && pm.distanceToNext < 480) {
+            Box(
+                Modifier.align(Alignment.BottomStart).navigationBarsPadding()
+                    .padding(start = 14.dp, bottom = 92.dp + 320.dp + 8.dp)
+            ) { GtaTurnBox(pm.nextStep, pm.distanceToNext) }
+        }
+
         // ---- Top: search, or the turn card ----
         Column(
             Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(12.dp).fillMaxWidth(),
@@ -231,6 +245,7 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
         ) {
             val p = progress
             when {
+                navigating && minimap -> {}
                 navigating && p != null && p.nextStep != null -> TurnCard(p.nextStep, p)
                 navigating -> StatusCard(if (loading) "Finding a route…" else "Waiting for GPS…")
                 else -> SearchPill { searchOpen = true }
@@ -274,6 +289,7 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
                 minimap = !minimap
             }
             HudButton(Icons.Default.OpenInNew, "Float the minimap over other apps", onClick = onFloat)
+            if (!navigating) HudButton(Icons.Default.Settings, "Settings") { settingsOpen = true }
         }
 
         // ---- Bottom: trip bar, route scrubber, or saved places ----
@@ -302,7 +318,17 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
                 onClose = { searchOpen = false },
             )
         }
-        addPlaceAt?.let { np -> AddPlaceDialog(np, onDismiss = { addPlaceAt = null }) }
+        addPlaceAt?.let { np ->
+            AddPlaceDialog(
+                np,
+                onDismiss = { addPlaceAt = null },
+                onWaypoint = {
+                    addPlaceAt = null
+                    NavigationEngine.navigateTo("Waypoint", LatLng(np.lat, np.lon), waypoint = true)
+                },
+            )
+        }
+        if (settingsOpen) SettingsDialog(onDismiss = { settingsOpen = false })
         selectedPlace?.let { p ->
             PlaceDialog(
                 place = p,
@@ -320,26 +346,47 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
 @Composable
 private fun TurnCard(step: RouteStep, p: NavProgress) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(HudCard).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(HudCard).padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)).background(Pink),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(painterResource(Instructions.iconRes(step)), contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    if (p.arrived) "Arrived" else Instructions.shortLabel(step),
+                    color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.SemiBold,
+                )
+                if (!p.arrived) {
+                    Text(
+                        "  " + Units.distance(p.distanceToNext),
+                        color = Color.White.copy(alpha = 0.75f), fontSize = 20.sp,
+                    )
+                }
+            }
+            val sub = if (p.arrived) "You're here" else step.name
+            if (sub.isNotBlank()) {
+                Text(sub, color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
-        Column(Modifier.padding(start = 14.dp)) {
-            Text(
-                if (p.arrived) "Arrived" else Units.distance(p.distanceToNext),
-                color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold,
-            )
-            Text(
-                if (p.arrived) "You're here" else Instructions.headline(step),
-                color = Color.White.copy(alpha = 0.88f), fontSize = 18.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Icon(
+            painterResource(Instructions.iconRes(step)), contentDescription = null,
+            tint = Pink, modifier = Modifier.padding(start = 12.dp).size(44.dp),
+        )
+    }
+}
+
+/** The game's next-turn box: "Turn Left  46 ft" with a pink arrow on the right. */
+@Composable
+private fun GtaTurnBox(step: RouteStep, distance: Double) {
+    Row(
+        Modifier.clip(RoundedCornerShape(12.dp)).background(HudCard).padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(Instructions.shortLabel(step), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text("  " + Units.distance(distance), color = Color.White.copy(alpha = 0.8f), fontSize = 17.sp)
+        Icon(
+            painterResource(Instructions.iconRes(step)), contentDescription = null,
+            tint = Pink, modifier = Modifier.padding(start = 10.dp).size(26.dp),
+        )
     }
 }
 
