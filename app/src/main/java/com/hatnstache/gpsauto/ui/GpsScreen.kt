@@ -83,6 +83,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hatnstache.gpsauto.data.Place
 import com.hatnstache.gpsauto.data.PlaceStore
 import com.hatnstache.gpsauto.map.BlipOverlayView
+import com.hatnstache.gpsauto.map.CornerMaskView
 import com.hatnstache.gpsauto.map.GtaMap
 import com.hatnstache.gpsauto.map.MapTheme
 import com.hatnstache.gpsauto.media.MediaRepository
@@ -103,12 +104,15 @@ private val Ground = Color(0xFF15171A)
 
 /** The phone's map view: MapLibre plus the blip layer, owned for the life of the screen. */
 class PhoneMap(context: Context) {
-    val mapView = MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
+    // SurfaceView rendering (the default) is much smoother than TextureView.
+    val mapView = MapView(context, MapLibreMapOptions.createFromAttributes(context))
     val blips = BlipOverlayView(context)
+    val mask = CornerMaskView(context).apply { visibility = android.view.View.GONE }
     val gta = GtaMap(context, mapView, blips)
     val container = FrameLayout(context).apply {
         addView(mapView, FrameLayout.LayoutParams(-1, -1))
         addView(blips, FrameLayout.LayoutParams(-1, -1))
+        addView(mask, FrameLayout.LayoutParams(-1, -1))
     }
     var onLongPress: ((LatLng) -> Unit)? = null
     var onBlipTap: ((Place) -> Unit)? = null
@@ -193,6 +197,10 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
         phoneMap.gta.followBias = if (minimap) 0.62f else 0.55f
         phoneMap.gta.recenter()
     }
+    LaunchedEffect(minimap, night) {
+        phoneMap.mask.visibility = if (minimap) android.view.View.VISIBLE else android.view.View.GONE
+        phoneMap.mask.outsideColor = if (night) 0xFF0D0E10.toInt() else 0xFF15171A.toInt()
+    }
     LaunchedEffect(navigating) {
         val window = (context as? Activity)?.window ?: return@LaunchedEffect
         if (navigating) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -209,7 +217,6 @@ fun GpsScreen(media: MediaRepository, onFloat: () -> Unit) {
             .fillMaxWidth()
             .height(320.dp)
             .clip(frame)
-            .border(2.dp, Color.White.copy(alpha = 0.85f), frame)
         Box(mapModifier) {
             AndroidView(
                 factory = {

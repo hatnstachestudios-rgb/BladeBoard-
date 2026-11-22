@@ -35,6 +35,9 @@ class BlipOverlayView(context: Context) : View(context) {
     var destinationColor: Int = ROUTE_PINK
         set(value) { field = value; invalidate() }
 
+    /** Smoothed on-screen player position (set every frame by GtaMap). */
+    var player: LatLng? = null
+
     /** Area the map is actually visible in (Android Auto covers some of the screen). */
     var visibleInsets = Rect()
         set(value) { field = value; invalidate() }
@@ -84,7 +87,7 @@ class BlipOverlayView(context: Context) : View(context) {
 
         val cam = m.cameraPosition
         val camBearing = cam.bearing
-        val me = NavigationEngine.location.value?.let { LatLng(it.latitude, it.longitude) }
+        val me = player ?: NavigationEngine.location.value?.let { LatLng(it.latitude, it.longitude) }
         val meScreen = me?.let { m.projection.toScreenLocation(it) }
         val origin = if (meScreen != null && frame.contains(meScreen.x, meScreen.y)) meScreen
         else PointF(frame.centerX(), frame.centerY())

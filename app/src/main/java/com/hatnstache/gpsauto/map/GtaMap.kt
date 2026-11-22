@@ -6,11 +6,14 @@ import android.graphics.Rect
 import android.location.Location
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.view.Choreographer
 import android.view.Gravity
 import com.hatnstache.gpsauto.data.Settings
 import com.hatnstache.gpsauto.nav.Geo
 import com.hatnstache.gpsauto.nav.NavigationEngine
 import com.hatnstache.gpsauto.nav.Route
+import com.hatnstache.gpsauto.nav.snapToRoute
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -32,6 +35,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.sin
 
 /**
  * Drives one map (phone screen, floating minimap, or car screen): the game-style look, the
@@ -79,6 +85,35 @@ class GtaMap(
     private val handler = Handler(Looper.getMainLooper())
     private val autoRecenter = Runnable { if (mode == Mode.FREE || mode == Mode.OVERVIEW) recenter() }
 
+    // ---- Smooth, real-time player motion ----
+    // GPS arrives about once a second. Between fixes we predict where you are *now* from your
+    // speed and heading (along the route when navigating), and glide the arrow and camera there
+    // every frame. That keeps it smooth without trailing behind your real position.
+    private var fixPos: LatLng? = null
+    private var fixAtNanos = 0L
+    private var fixSpeed = 0.0
+    private var fixHeading = 0.0
+    private var fixAlong: Double? = null
+    private var snapHint = 0
+    private var dispLat = 0.0
+    private var dispLon = 0.0
+    private var dispBearing = 0.0
+    private var dispZoom = 16.8
+    private var hasDisp = false
+    private var lastFrameNanos = 0L
+    private var cameraHoldUntil = 0L
+    private var running = false
+    private var lastRouteDraw = 0L
+    private var lastDrawnRoute: Route? = null
+
+    private val frame = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (!running) return
+            tick(frameTimeNanos)
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
     init {
         mapView.getMapAsync { m -> setup(m) }
     }
@@ -113,6 +148,8 @@ class GtaMap(
             if (mode == Mode.FREE) flattenForZoom()
         }
         onReady?.invoke(m)
+        running = true
+        Choreographer.getInstance().postFrameCallback(frame)
     }
 
     private fun onStyle(style: Style) {
@@ -167,11 +204,17 @@ class GtaMap(
         applyLabels()
         applyRouteColor()
         pendingRoute?.let { drawRouteLine(it) }
-        NavigationEngine.location.value?.let { onLocation(it, NavigationEngine.heading.value, animate = false) }
+        if (hasDisp) pushPlayer()
+        else NavigationEngine.location.value?.let { onLocation(it, NavigationEngine.heading.value, animate = false) }
     }
 
     /** Draws only the part of the route still ahead, so the line starts at the arrow like the game. */
     fun showRoute(route: Route?, along: Double?, snapped: LatLng?) {
+        // Rebuilding a long line is expensive; trim it every couple of seconds, not every fix.
+        val now = SystemClock.elapsedRealtime()
+        if (route != null && route === lastDrawnRoute && now - lastRouteDraw < 2500) return
+        lastDrawnRoute = route
+        lastRouteDraw = now
         if (route == null) {
             pendingRoute = null
             if (styleReady) routeSource?.setGeoJson(FeatureCollection.fromFeatures(emptyArray<Feature>()))
@@ -198,45 +241,115 @@ class GtaMap(
     }
 
     fun onLocation(loc: Location, heading: Float, animate: Boolean = true) {
-        if (styleReady) {
-            val f = Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude))
-            f.addNumberProperty("bearing", heading)
-            meSource?.setGeoJson(f)
+        val raw = LatLng(loc.latitude, loc.longitude)
+        fixPos = raw
+        fixAtNanos = SystemClock.elapsedRealtimeNanos()
+        fixSpeed = if (loc.hasSpeed()) loc.speed.toDouble() else 0.0
+        fixHeading = heading.toDouble()
+        // On a route, ride the road line instead of GPS wobble (only if the fix is close to it).
+        fixAlong = NavigationEngine.route.value?.let { r ->
+            val snap = snapToRoute(r.points, r.cumulative, raw, snapHint)
+            if (snap != null && snap.offset < 30) {
+                snapHint = snap.segment
+                fixPos = snap.point
+                snap.along
+            } else null
         }
-        blips?.invalidate()
-        if (mode == Mode.FOLLOW) follow(loc, heading, animate)
+        if (!hasDisp || !animate) {
+            val p = fixPos!!
+            dispLat = p.latitude; dispLon = p.longitude; dispBearing = fixHeading
+            dispZoom = targetZoom()
+            hasDisp = true
+            pushPlayer()
+            if (mode == Mode.FOLLOW) moveFollowCamera()
+        }
     }
 
-    private fun follow(loc: Location, heading: Float, animate: Boolean) {
-        val m = map ?: return
+    private fun targetZoom() = when {
+        compact -> 16.4
+        fixSpeed > 25 -> 15.4
+        fixSpeed > 14 -> 16.0
+        else -> 16.8
+    }
+
+    /** Where you are right now, predicted from the last fix. */
+    private fun predicted(nowNanos: Long): Pair<LatLng, Double>? {
+        val base = fixPos ?: return null
+        val dt = ((nowNanos - fixAtNanos) / 1e9).coerceIn(0.0, 1.5)
+        val ahead = if (fixSpeed > 0.8) fixSpeed * dt else 0.0
+        val r = NavigationEngine.route.value
+        val along = fixAlong
+        if (r != null && along != null) {
+            val (p, seg) = Geo.pointAlong(r.points, r.cumulative, along + ahead)
+            val bearing = if (fixSpeed > 1.5 && seg + 1 < r.points.size) Geo.bearing(r.points[seg], r.points[seg + 1]) else fixHeading
+            return p to bearing
+        }
+        if (ahead == 0.0) return base to fixHeading
+        val rad = Math.toRadians(fixHeading)
+        val dLat = ahead * cos(rad) / 110_540.0
+        val dLon = ahead * sin(rad) / (111_320.0 * cos(Math.toRadians(base.latitude)))
+        return LatLng(base.latitude + dLat, base.longitude + dLon) to fixHeading
+    }
+
+    private fun tick(nowNanos: Long) {
+        val dtFrame = if (lastFrameNanos == 0L) 0.016 else ((nowNanos - lastFrameNanos) / 1e9).coerceIn(0.0, 0.1)
+        lastFrameNanos = nowNanos
+        if (!hasDisp || !styleReady) return
+        val (target, targetBearing) = predicted(SystemClock.elapsedRealtimeNanos()) ?: return
+
+        // Exponential smoothing: tight on position (absorbs small prediction corrections),
+        // softer on rotation and zoom so the view doesn't jerk.
+        val kPos = 1 - exp(-dtFrame / 0.12)
+        val kRot = 1 - exp(-dtFrame / 0.30)
+        val kZoom = 1 - exp(-dtFrame / 1.5)
+        val newLat = dispLat + (target.latitude - dispLat) * kPos
+        val newLon = dispLon + (target.longitude - dispLon) * kPos
+        var dB = ((targetBearing - dispBearing + 540) % 360) - 180
+        val newBearing = (dispBearing + dB * kRot + 360) % 360
+        val newZoom = dispZoom + (targetZoom() - dispZoom) * kZoom
+
+        val moved = abs(newLat - dispLat) > 1e-8 || abs(newLon - dispLon) > 1e-8 ||
+            abs(dB) > 0.05 || abs(newZoom - dispZoom) > 0.001
+        if (!moved) return
+        dispLat = newLat; dispLon = newLon; dispBearing = newBearing; dispZoom = newZoom
+        pushPlayer()
+        if (mode == Mode.FOLLOW && SystemClock.elapsedRealtime() > cameraHoldUntil) moveFollowCamera()
+    }
+
+    private fun pushPlayer() {
+        val f = Feature.fromGeometry(Point.fromLngLat(dispLon, dispLat))
+        f.addNumberProperty("bearing", dispBearing)
+        meSource?.setGeoJson(f)
+        blips?.player = LatLng(dispLat, dispLon)
+        blips?.invalidate()
+    }
+
+    private fun followPosition(): CameraPosition {
         val h = (mapView.height - insets.top - insets.bottom).coerceAtLeast(1)
         // Push the focal point down so the road ahead fills the view.
         val topPad = (h * (followBias - 0.5f) * 2f).coerceAtLeast(0f).toDouble()
-        val zoom = when {
-            compact -> 16.4
-            loc.speed > 25 -> 15.4
-            loc.speed > 14 -> 16.0
-            else -> 16.8
-        }
-        val pos = CameraPosition.Builder()
-            .target(LatLng(loc.latitude, loc.longitude))
-            .bearing(heading.toDouble())
+        return CameraPosition.Builder()
+            .target(LatLng(dispLat, dispLon))
+            .bearing(dispBearing)
             .tilt(if (compact) 50.0 else 56.0)
-            .zoom(zoom)
+            .zoom(dispZoom)
             .padding(insets.left.toDouble(), insets.top + topPad, insets.right.toDouble(), insets.bottom.toDouble())
             .build()
-        if (animate) m.easeCamera(CameraUpdateFactory.newCameraPosition(pos), 950)
-        else m.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+    }
+
+    private fun moveFollowCamera() {
+        map?.moveCamera(CameraUpdateFactory.newCameraPosition(followPosition()))
     }
 
     /** Snap back behind the arrow. */
     fun recenter() {
         handler.removeCallbacks(autoRecenter)
         mode = Mode.FOLLOW
-        val loc = NavigationEngine.location.value ?: return
         val m = map ?: return
+        if (!hasDisp) return
         m.cancelTransitions()
-        follow(loc, NavigationEngine.heading.value, animate = true)
+        cameraHoldUntil = SystemClock.elapsedRealtime() + 700
+        m.animateCamera(CameraUpdateFactory.newCameraPosition(followPosition()), 650)
     }
 
     private fun userMoved() {
@@ -386,6 +499,8 @@ class GtaMap(
     }
 
     fun release() {
+        running = false
+        Choreographer.getInstance().removeFrameCallback(frame)
         handler.removeCallbacks(autoRecenter)
     }
 }

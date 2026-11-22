@@ -23,6 +23,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.coroutineScope
 import com.hatnstache.gpsauto.data.PlaceStore
 import com.hatnstache.gpsauto.map.BlipOverlayView
+import com.hatnstache.gpsauto.map.CornerMaskView
 import com.hatnstache.gpsauto.map.GtaMap
 import com.hatnstache.gpsauto.nav.NavigationEngine
 import com.hatnstache.gpsauto.nav.Units
@@ -47,6 +48,7 @@ class CarMapRenderer(private val carContext: CarContext, private val lifecycle: 
     private var blips: BlipOverlayView? = null
     private var frame: FrameLayout? = null
     private var readout: TextView? = null
+    private var mask: CornerMaskView? = null
     private var root: FrameLayout? = null
     private val jobs = mutableListOf<Job>()
     private var visibleArea: Rect? = null
@@ -85,11 +87,14 @@ class CarMapRenderer(private val carContext: CarContext, private val lifecycle: 
         val ctx = pres.context
         density = ctx.resources.displayMetrics.density
 
-        val mv = MapView(ctx, MapLibreMapOptions.createFromAttributes(ctx).textureMode(true))
+        val mv = MapView(ctx, MapLibreMapOptions.createFromAttributes(ctx))
         val bv = BlipOverlayView(ctx)
         val fr = FrameLayout(ctx)
         fr.addView(mv, FrameLayout.LayoutParams(-1, -1))
         fr.addView(bv, FrameLayout.LayoutParams(-1, -1))
+        val mk = CornerMaskView(ctx).apply { radiusDp = 26f; visibility = View.GONE; outsideColor = 0xFF24272B.toInt() }
+        fr.addView(mk, FrameLayout.LayoutParams(-1, -1))
+        mask = mk
         val ro = TextView(ctx).apply {
             setTextColor(0xFF1C1D20.toInt())
             textSize = 20f
@@ -138,7 +143,9 @@ class CarMapRenderer(private val carContext: CarContext, private val lifecycle: 
         }
         jobs += scope.launch { PlaceStore.places.collect { bv.places = it } }
         g.onThemeApplied = { night ->
-            root?.setBackgroundColor(if (night) 0xFF101113.toInt() else 0xFF24272B.toInt())
+            val bg = if (night) 0xFF101113.toInt() else 0xFF24272B.toInt()
+            root?.setBackgroundColor(bg)
+            mask?.outsideColor = bg
             ro.setTextColor(if (night) Color.WHITE else 0xFF1C1D20.toInt())
             ro.setShadowLayer(4f, 0f, 0f, if (night) 0xCC000000.toInt() else 0xCCF4F2ED.toInt())
         }
@@ -157,8 +164,7 @@ class CarMapRenderer(private val carContext: CarContext, private val lifecycle: 
 
         if (!minimap) {
             fr.layoutParams = FrameLayout.LayoutParams(-1, -1)
-            fr.clipToOutline = false
-            fr.foreground = null
+            mask?.visibility = View.GONE
             readout?.visibility = View.GONE
             g.insets = Rect(area.left, area.top, (w - area.right).coerceAtLeast(0), (h - area.bottom).coerceAtLeast(0))
             g.followBias = 0.62f
@@ -170,18 +176,7 @@ class CarMapRenderer(private val carContext: CarContext, private val lifecycle: 
                 leftMargin = area.left + (area.width() - fw) / 2
                 topMargin = area.top + (area.height() - fh) / 2
             }
-            val radius = 26 * density
-            fr.outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, radius)
-                }
-            }
-            fr.clipToOutline = true
-            fr.foreground = GradientDrawable().apply {
-                cornerRadius = radius
-                setStroke((2 * density).toInt(), 0xD9FFFFFF.toInt())
-                setColor(Color.TRANSPARENT)
-            }
+            mask?.visibility = View.VISIBLE
             readout?.visibility = View.VISIBLE
             g.insets = Rect()
             g.followBias = 0.64f
@@ -230,6 +225,6 @@ class CarMapRenderer(private val carContext: CarContext, private val lifecycle: 
         runCatching { presentation?.dismiss() }
         virtualDisplay?.release()
         presentation = null; virtualDisplay = null; mapView = null; gta = null
-        blips = null; frame = null; readout = null; root = null
+        blips = null; frame = null; readout = null; root = null; mask = null
     }
 }
